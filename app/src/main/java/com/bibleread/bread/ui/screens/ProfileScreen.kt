@@ -66,7 +66,7 @@ class OpenImagesSAF : ActivityResultContracts.OpenDocument() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(onNavigateToDownloads: () -> Unit = {}) {
+fun ProfileScreen() {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showSheet by remember { mutableStateOf(false) }
@@ -304,7 +304,6 @@ fun ProfileScreen(onNavigateToDownloads: () -> Unit = {}) {
         SettingItem("Notification Settings")
         SettingItem("Language")
         SettingItem("Theme")
-        SettingItem("Downloads", onClick = onNavigateToDownloads)
         SettingItem("Log Out", isLast = true)
     }
 }

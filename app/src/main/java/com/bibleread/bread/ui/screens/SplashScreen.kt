@@ -98,12 +98,6 @@ fun SplashScreen(onModeSelected: (Boolean) -> Unit) {
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = "NIV",
-                color = Color.Gray,
-                fontSize = 12.sp,
-                fontStyle = FontStyle.Italic
-            )
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -129,47 +123,23 @@ fun SplashScreen(onModeSelected: (Boolean) -> Unit) {
             Spacer(modifier = Modifier.weight(1f))
         }
 
-        // Mode Selection Buttons at the bottom
-        Row(
+        // Start Button at the bottom
+        Button(
+            onClick = { onModeSelected(false) }, // Mode no longer matters
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 32.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .fillMaxWidth(0.8f),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+            shape = RoundedCornerShape(12.dp)
         ) {
-            // Offline Mode Button
-            Button(
-                onClick = { onModeSelected(false) },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "OFFLINE",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
-
-            // Online Mode Button
-            Button(
-                onClick = { onModeSelected(true) },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "ONLINE",
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
+            Text(
+                text = "READ BIBLE",
+                color = Color.Black,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
         }
     }
 }

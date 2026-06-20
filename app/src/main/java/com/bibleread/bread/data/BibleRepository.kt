@@ -1,49 +1,45 @@
 package com.bibleread.bread.data
 
-import java.net.URLEncoder
+import kotlinx.coroutines.flow.firstOrNull
 
-class BibleRepository(private val dao: VerseDao) {
+class BibleRepository(
+    private val verseDao: VerseDao,
+    private val bookmarkDao: BookmarkDao
+) {
 
     suspend fun getChapter(book: String, chapter: Int): List<VerseEntity> {
-        val cached = dao.getChapter(book, chapter)
-        if (cached.isNotEmpty()) return cached
-
-        val reference = URLEncoder.encode("$book $chapter", "UTF-8")
-        val response = BibleApi.service.getChapter(reference)
-        val entities = response.verses.map {
-            VerseEntity(book = it.book_name, chapter = it.chapter, verse = it.verse, text = it.text)
-        }
-        dao.insertAll(entities)
-        return entities
+        return verseDao.getChapter(book, chapter)
     }
 
-    suspend fun getBook(book: String, chapterCount: Int): List<VerseEntity> {
-        val cached = dao.getBook(book)
-        if (cached.isNotEmpty()) return cached
-
-        val allVerses = mutableListOf<VerseEntity>()
-        (1..chapterCount).forEach { chapter ->
-            val verses = getChapter(book, chapter)
-            allVerses.addAll(verses)
-        }
-        return allVerses
+    suspend fun getBook(book: String): List<VerseEntity> {
+        return verseDao.getBook(book)
     }
 
-    suspend fun downloadBook(book: String, chapterCount: Int) {
-        (1..chapterCount).forEach { chapter ->
-            val cached = dao.getChapter(book, chapter)
-            if (cached.isEmpty()) {
-                val reference = URLEncoder.encode("$book $chapter", "UTF-8")
-                val response = BibleApi.service.getChapter(reference)
-                val entities = response.verses.map {
-                    VerseEntity(book = it.book_name, chapter = it.chapter, verse = it.verse, text = it.text)
-                }
-                dao.insertAll(entities)
-            }
+    suspend fun getTotalVerseCount(): Int = verseDao.getTotalVerseCount()
+
+    fun isBookDownloaded(book: String) = verseDao.isBookDownloaded(book)
+
+    fun getDownloadedBooks() = verseDao.getDownloadedBooks()
+
+    // Bookmark methods
+    fun getAllBookmarks() = bookmarkDao.getAllBookmarks()
+
+    suspend fun toggleBookmark(verse: VerseEntity) {
+        val isBookmarked = bookmarkDao.isBookmarked(verse.book, verse.chapter, verse.verse).firstOrNull() ?: false
+        if (isBookmarked) {
+            bookmarkDao.deleteBookmark(verse.book, verse.chapter, verse.verse)
+        } else {
+            bookmarkDao.insertBookmark(
+                BookmarkEntity(
+                    book = verse.book,
+                    chapter = verse.chapter,
+                    verse = verse.verse,
+                    text = verse.text
+                )
+            )
         }
     }
 
-    fun isBookDownloaded(book: String) = dao.isBookDownloaded(book)
-
-    fun getDownloadedBooks() = dao.getDownloadedBooks()
+    fun isBookmarked(book: String, chapter: Int, verse: Int) = 
+        bookmarkDao.isBookmarked(book, chapter, verse)
 }

@@ -37,23 +37,26 @@ import com.bibleread.bread.viewmodel.BibleUiState
 import com.bibleread.bread.viewmodel.BibleViewModel
 
 val BIBLE_BOOKS = mapOf(
-    "Genesis" to 50, "Exodus" to 40, "Leviticus" to 27, "Numbers" to 36,
-    "Deuteronomy" to 34, "Joshua" to 24, "Judges" to 21, "Ruth" to 4,
-    "1 Samuel" to 31, "2 Samuel" to 24, "1 Kings" to 22, "2 Kings" to 25,
-    "1 Chronicles" to 29, "2 Chronicles" to 36, "Ezra" to 10, "Nehemiah" to 13,
-    "Esther" to 10, "Job" to 42, "Psalms" to 150, "Proverbs" to 31,
-    "Ecclesiastes" to 12, "Song of Solomon" to 8, "Isaiah" to 66, "Jeremiah" to 52,
-    "Lamentations" to 5, "Ezekiel" to 48, "Daniel" to 12, "Hosea" to 14,
-    "Joel" to 3, "Amos" to 9, "Obadiah" to 1, "Jonah" to 4, "Micah" to 7,
-    "Nahum" to 3, "Habakkuk" to 3, "Zephaniah" to 3, "Haggai" to 2,
-    "Zechariah" to 14, "Malachi" to 4, "Matthew" to 28, "Mark" to 16,
-    "Luke" to 24, "John" to 21, "Acts" to 28, "Romans" to 16,
-    "1 Corinthians" to 16, "2 Corinthians" to 13, "Galatians" to 6,
-    "Ephesians" to 6, "Philippians" to 4, "Colossians" to 4,
-    "1 Thessalonians" to 5, "2 Thessalonians" to 3, "1 Timothy" to 6,
-    "2 Timothy" to 4, "Titus" to 3, "Philemon" to 1, "Hebrews" to 13,
-    "James" to 5, "1 Peter" to 5, "2 Peter" to 3, "1 John" to 5,
-    "2 John" to 1, "3 John" to 1, "Jude" to 1, "Revelation" to 22,
+    // Old Testament
+    "Genesis" to 50, "Exodo" to 40, "Levitico" to 27, "Mga Bilang" to 36,
+    "Deuteronomio" to 34, "Josue" to 24, "Mga Hukom" to 21, "Ruth" to 4,
+    "1 Samuel" to 31, "2 Samuel" to 24, "1 Mga Hari" to 22, "2 Mga Hari" to 25,
+    "1 Mga Cronica" to 29, "2 Mga Cronica" to 36, "Ezra" to 10, "Nehemias" to 13,
+    "Ester" to 10, "Job" to 42, "Mga Awit" to 150, "Mga Kawikaan" to 31,
+    "Ang Mangangaral" to 12, "Ang Awit ni Solomon" to 8, "Isaias" to 66, "Jeremias" to 52,
+    "Mga Panaghoy" to 5, "Ezekiel" to 48, "Daniel" to 12, "Hosea" to 14,
+    "Joel" to 3, "Amos" to 9, "Obadias" to 1, "Jonas" to 4, "Mikas" to 7,
+    "Nahum" to 3, "Habakuk" to 3, "Zefanias" to 3, "Hagai" to 2,
+    "Zacarias" to 14, "Malakias" to 4,
+    // New Testament
+    "Mateo" to 28, "Marcos" to 16, "Lucas" to 24, "Juan" to 21,
+    "Mga Gawa" to 28, "Mga Taga-Roma" to 16,
+    "1 Mga Taga-Corinto" to 16, "2 Mga Taga-Corinto" to 13, "Mga Taga-Galacia" to 6,
+    "Mga Taga-Efeso" to 6, "Mga Taga-Filipos" to 4, "Mga Taga-Colosas" to 4,
+    "1 Mga Taga-Tesalonica" to 5, "2 Mga Taga-Tesalonica" to 3, "1 Timoteo" to 6,
+    "2 Timoteo" to 4, "Tito" to 3, "Filemon" to 1, "Mga Hebreo" to 13,
+    "Santiago" to 5, "1 Pedro" to 5, "2 Pedro" to 3, "1 Juan" to 5,
+    "2 Juan" to 1, "3 Juan" to 1, "Judas" to 1, "Pahayag" to 22,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -63,8 +66,6 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
 
     var selectedBook by remember { mutableStateOf(books[0]) }
     var showBookSelection by remember { mutableStateOf(false) }
-    var showVersionSelection by remember { mutableStateOf(false) }
-    var selectedVersion by remember { mutableStateOf("KJV") }
     var targetChapter by remember { mutableIntStateOf(1) }
     
     // Appearance settings
@@ -73,11 +74,6 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
 
     val uiState by vm.uiState.collectAsState()
     val listState = rememberLazyListState()
-
-    LaunchedEffect(selectedBook) {
-        vm.loadBook(selectedBook, BIBLE_BOOKS[selectedBook] ?: 1)
-        // We will scroll to targetChapter once the data is loaded in another LaunchedEffect
-    }
 
     LaunchedEffect(uiState) {
         if (uiState is BibleUiState.Success) {
@@ -108,23 +104,6 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                     .padding(top = 16.dp, start = 16.dp, end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Version Button (Left)
-                Surface(
-                    onClick = { showVersionSelection = true },
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.1f),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(selectedVersion, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
                 // Books Button (Center, Taller, Big/Bold text)
                 Surface(
                     onClick = { showBookSelection = true },
@@ -167,6 +146,11 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
 
             // Content
             when (val state = uiState) {
+                is BibleUiState.Idle -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No Content", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
+                    }
+                }
                 is BibleUiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = Color.White)
@@ -250,21 +234,6 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                     showBookSelection = false
                 },
                 onClose = { showBookSelection = false }
-            )
-        }
-
-        // Full Screen Version Selection Overlay
-        AnimatedVisibility(
-            visible = showVersionSelection,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-        ) {
-            VersionSelectionOverlay(
-                onVersionSelected = { version ->
-                    selectedVersion = version
-                    showVersionSelection = false
-                },
-                onClose = { showVersionSelection = false }
             )
         }
     }
@@ -351,50 +320,6 @@ fun BookSelectionOverlay(
 }
 
 @Composable
-fun VersionSelectionOverlay(
-    onVersionSelected: (String) -> Unit,
-    onClose: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundDark)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Versions",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
-            }
-        }
-
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(listOf("KJV", "ASV", "WEB")) { version ->
-                Text(
-                    text = version,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onVersionSelected(version) }
-                        .padding(16.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun AppearanceSettingsOverlay(
     currentFontSize: Float,
     onFontSizeChange: (Float) -> Unit,
@@ -470,6 +395,3 @@ fun AppearanceSettingsOverlay(
         }
     }
 }
-
-
-

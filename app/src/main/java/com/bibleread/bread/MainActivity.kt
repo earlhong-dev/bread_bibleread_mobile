@@ -10,23 +10,36 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -35,17 +48,39 @@ import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
+import com.bibleread.bread.data.BibleDatabase
+import com.bibleread.bread.data.BibleXmlParser
 import com.bibleread.bread.ui.screens.*
 import com.bibleread.bread.ui.theme.BreadTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    private val _dbReady = mutableStateOf(false)
+    val dbReady: State<Boolean> = _dbReady
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Parse XML into database on first launch (runs in background)
+        CoroutineScope(Dispatchers.IO).launch {
+            val db = BibleDatabase.getInstance(applicationContext)
+            val count = db.verseDao().getTotalVerseCount()
+            if (count == 0) {
+                BibleXmlParser.parse(applicationContext, db.verseDao(), "mbbtag05.xml")
+            }
+            withContext(Dispatchers.Main) {
+                _dbReady.value = true
+            }
+        }
+
         setContent {
             BreadTheme {
-                MainApp()
+                MainApp(dbReady = dbReady)
             }
         }
     }
@@ -58,14 +93,17 @@ sealed class Screen(val route: String, val icon: Int? = null, val label: String)
     object Community : Screen("home", R.raw.ic_nav_community, "Community")
     object Chats : Screen("chats", R.raw.ic_nav_chats, "Chats")
     object Profile : Screen("profile", R.raw.ic_nav_profile, "Profile")
-    object Downloads : Screen("downloads", label = "Downloads")
 }
 
 @Composable
-fun MainApp() {
+fun MainApp(dbReady: State<Boolean>) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val isDbReady by dbReady
+
+    // Track if user has left splash screen
+    var splashDone by remember { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -140,32 +178,95 @@ fun MainApp() {
             }
         }
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Splash.route,
-            modifier = Modifier.padding(innerPadding),
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
-        ) {
-            composable(Screen.Splash.route) { 
-                SplashScreen(onModeSelected = { isOnline ->
-                    // Logic to handle online/offline can be added here
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                    navController.navigate(Screen.Community.route) {
-                        popUpTo(Screen.Splash.route) { inclusive = true }
-                    }
-                }) 
+        Box(modifier = Modifier.padding(innerPadding)) {
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Splash.route,
+                modifier = Modifier.fillMaxSize(),
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { EnterTransition.None },
+                popExitTransition = { ExitTransition.None }
+            ) {
+                composable(Screen.Splash.route) {
+                    SplashScreen(onModeSelected = { isOnline ->
+                        splashDone = true
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        navController.navigate(Screen.Community.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    })
+                }
+                composable(Screen.Community.route) { HomeScreen() }
+                composable(Screen.Reader.route) { ReaderScreen() }
+                composable(Screen.Search.route) { SearchScreen() }
+                composable(Screen.Chats.route) { ChatsScreen() }
+                composable(Screen.Profile.route) { ProfileScreen() }
             }
-            composable(Screen.Community.route) { HomeScreen() }
-            composable(Screen.Reader.route) { ReaderScreen() }
-            composable(Screen.Search.route) { SearchScreen() }
-            composable(Screen.Chats.route) { ChatsScreen() }
-            composable(Screen.Profile.route) { ProfileScreen(onNavigateToDownloads = { navController.navigate(Screen.Downloads.route) }) }
-            composable(Screen.Downloads.route) { DownloadsScreen() }
+
+            // Loading overlay — shows after splash until DB is ready
+            if (splashDone && !isDbReady) {
+                BibleLoadingOverlay()
+            }
+        }
+    }
+}
+
+@Composable
+fun BibleLoadingOverlay() {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .alpha(1f),
+        contentAlignment = Alignment.Center
+    ) {
+        // Semi-transparent dark scrim
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(0.92f)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black.copy(alpha = 0.92f)
+            ) {}
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                color = Color.White,
+                strokeWidth = 3.dp,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Loading Your Bible Data",
+                color = Color.White.copy(alpha = alpha),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "This only happens once",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 13.sp
+            )
         }
     }
 }
