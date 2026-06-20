@@ -25,6 +25,23 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
     private val _uiState = MutableStateFlow<BibleUiState>(BibleUiState.Idle)
     val uiState: StateFlow<BibleUiState> = _uiState
 
+    init {
+        // Load Genesis 1 as default — waits if DB is still being populated
+        viewModelScope.launch {
+            // Poll until DB has data (parse may still be running on first launch)
+            var attempts = 0
+            while (attempts < 30) {
+                val count = repository.getTotalVerseCount()
+                if (count > 0) {
+                    loadChapter("Genesis", 1)
+                    break
+                }
+                kotlinx.coroutines.delay(1000)
+                attempts++
+            }
+        }
+    }
+
     fun loadBook(book: String) {
         _uiState.value = BibleUiState.Loading
         viewModelScope.launch {

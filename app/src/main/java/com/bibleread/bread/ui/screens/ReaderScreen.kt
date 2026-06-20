@@ -64,7 +64,7 @@ val BIBLE_BOOKS = mapOf(
 fun ReaderScreen(vm: BibleViewModel = viewModel()) {
     val books = BIBLE_BOOKS.keys.toList()
 
-    var selectedBook by remember { mutableStateOf(books[0]) }
+    var selectedBook by remember { mutableStateOf("Genesis") }
     var showBookSelection by remember { mutableStateOf(false) }
     var targetChapter by remember { mutableIntStateOf(1) }
     
@@ -79,12 +79,12 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
         if (uiState is BibleUiState.Success) {
             val verses = (uiState as BibleUiState.Success).verses
             val versesByChapter = verses.groupBy { it.chapter }
-            
+
             var targetIndex = 0
             for ((chapter, chapterVerses) in versesByChapter) {
                 if (chapter == targetChapter) break
-                targetIndex += 1 // header
-                targetIndex += chapterVerses.size // items
+                targetIndex += 1 // sticky header
+                targetIndex += chapterVerses.size // verse items
                 targetIndex += 1 // spacer
             }
             listState.scrollToItem(targetIndex)
@@ -187,10 +187,33 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                                 }
                             }
                             items(verses, key = { "${it.book}-${it.chapter}-${it.verse}" }) { verse ->
+                                // Heading
+                                if (!verse.heading.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = verse.heading,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 2.dp)
+                                    )
+                                    // Subheading
+                                    if (!verse.subheading.isNullOrBlank()) {
+                                        Text(
+                                            text = verse.subheading,
+                                            color = Color.Gray,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Normal,
+                                            modifier = Modifier.padding(bottom = 4.dp)
+                                        )
+                                    }
+                                }
+                                // Verse text
+                                val verseLabel = verse.display ?: verse.verse.toString()
                                 Text(
                                     text = buildAnnotatedString {
                                         withStyle(SpanStyle(color = Color(0xFFAAAAAA), fontWeight = FontWeight.Bold, fontSize = 12.sp)) {
-                                            append("${verse.verse}  ")
+                                            append("$verseLabel  ")
                                         }
                                         withStyle(SpanStyle(color = Color.White, fontSize = fontSize.sp)) {
                                             append(verse.text.trim())
@@ -232,6 +255,7 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                     targetChapter = chapter
                     selectedBook = book
                     showBookSelection = false
+                    vm.loadChapter(book, chapter)
                 },
                 onClose = { showBookSelection = false }
             )

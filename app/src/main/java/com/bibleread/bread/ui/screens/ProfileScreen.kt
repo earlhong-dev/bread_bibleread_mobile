@@ -47,6 +47,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.compose.rememberAsyncImagePainter
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import com.bibleread.bread.data.BibleDatabase
 import com.bibleread.bread.ui.theme.BackgroundDark
 import java.io.File
 import java.text.SimpleDateFormat
@@ -300,10 +305,122 @@ fun ProfileScreen() {
         Spacer(modifier = Modifier.height(32.dp))
 
         // Settings Items (Full width highlights)
+        val context2 = LocalContext.current
+        var verseCount by remember { mutableStateOf(-1) }
+        var downloadsExpanded by remember { mutableStateOf(false) }
+
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val count = BibleDatabase.getInstance(context2).verseDao().getTotalVerseCount()
+                verseCount = count
+            }
+        }
+
         SettingItem("Edit Profile")
         SettingItem("Notification Settings")
         SettingItem("Language")
         SettingItem("Theme")
+
+        // Downloads expandable item
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { downloadsExpanded = !downloadsExpanded }
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Downloads",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal
+                )
+                Icon(
+                    imageVector = if (downloadsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = Color.Gray
+                )
+            }
+
+            if (downloadsExpanded) {
+                val isDownloaded = verseCount > 0
+                val statusText = when {
+                    verseCount < 0 -> "Checking..."
+                    isDownloaded -> "Downloaded"
+                    else -> "Not Downloaded"
+                }
+                val statusColor = when {
+                    verseCount < 0 -> Color.Gray
+                    isDownloaded -> Color(0xFF4CAF50)
+                    else -> Color(0xFFFF5252)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "MBBTAG05",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Magandang Balita Biblia (2005)",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                        if (isDownloaded && verseCount > 0) {
+                            Text(
+                                text = "$verseCount verses",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isDownloaded) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = statusColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                tint = statusColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            text = statusText,
+                            color = statusColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                color = Color.DarkGray,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+
         SettingItem("Log Out", isLast = true)
     }
 }
