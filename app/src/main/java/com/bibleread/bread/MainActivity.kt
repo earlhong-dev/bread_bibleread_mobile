@@ -36,7 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,9 +45,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import coil.compose.rememberAsyncImagePainter
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
 import com.bibleread.bread.data.BibleDatabase
 import com.bibleread.bread.data.BibleXmlParser
 import com.bibleread.bread.ui.screens.*
@@ -88,11 +85,11 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen(val route: String, val icon: Int? = null, val label: String) {
     object Splash : Screen("splash", label = "Splash")
-    object Reader : Screen("reader", R.raw.ic_nav_bible, "Bible")
-    object Search : Screen("search", R.raw.ic_nav_search, "Search")
-    object Community : Screen("home", R.raw.ic_nav_community, "Community")
-    object Chats : Screen("chats", R.raw.ic_nav_chats, "Chats")
-    object Profile : Screen("profile", R.raw.ic_nav_profile, "Profile")
+    object Reader : Screen("reader", R.drawable.ic_bibletab, "Bible")
+    object Search : Screen("search", R.drawable.ic_searchtab, "Search")
+    object Community : Screen("home", R.drawable.ic_commtab, "Community")
+    object Chats : Screen("chats", R.drawable.ic_chattab, "Chats")
+    object Profile : Screen("profile", R.drawable.ic_profiletab, "Profile")
 }
 
 @Composable
@@ -140,15 +137,10 @@ fun MainApp(dbReady: State<Boolean>) {
                     ) {
                         items.forEach { screen ->
                             NavigationBarItem(
-                                icon = { 
+                                icon = {
                                     screen.icon?.let {
                                         Icon(
-                                            painter = rememberAsyncImagePainter(
-                                                model = ImageRequest.Builder(LocalContext.current)
-                                                    .data(it)
-                                                    .decoderFactory(SvgDecoder.Factory())
-                                                    .build()
-                                            ),
+                                            painter = painterResource(id = it),
                                             contentDescription = screen.label,
                                             modifier = Modifier.size(28.dp)
                                         )
