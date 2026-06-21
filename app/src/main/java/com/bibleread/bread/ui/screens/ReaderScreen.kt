@@ -24,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -59,7 +60,6 @@ val BIBLE_BOOKS = mapOf(
     "2 Juan" to 1, "3 Juan" to 1, "Judas" to 1, "Pahayag" to 22,
 )
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ReaderScreen(vm: BibleViewModel = viewModel()) {
     val books = BIBLE_BOOKS.keys.toList()
@@ -97,49 +97,40 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                 .fillMaxSize()
                 .background(BackgroundDark)
         ) {
-            // Selection Buttons Header
-            Row(
+            // Header — centered book name, settings top-right
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp, start = 16.dp, end = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(top = 24.dp, bottom = 16.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Books Button (Center, Taller, Big/Bold text)
-                Surface(
-                    onClick = { showBookSelection = true },
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.1f),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "$selectedBook $targetChapter",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Settings Button (Right)
+                Text(
+                    text = selectedBook,
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                // Settings button anchored to top-right
                 Surface(
                     onClick = { showSettings = true },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = Color.White.copy(alpha = 0.1f),
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp)
+                        .size(32.dp)
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(15.dp)
+                        )
                     }
                 }
             }
@@ -167,49 +158,58 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 20.dp),
-                        contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp)
+                            .padding(horizontal = 36.dp),
+                        contentPadding = PaddingValues(top = 0.dp, bottom = 120.dp)
                     ) {
                         versesByChapter.forEach { (chapter, verses) ->
-                            stickyHeader(key = "$selectedBook-$chapter") {
+            item(key = "$selectedBook-$chapter-header") {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(BackgroundDark)
-                                        .padding(vertical = 12.dp)
+                                        .padding(top = 0.dp, bottom = 0.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "$selectedBook $chapter",
-                                        color = Color.White,
-                                        fontSize = 28.sp,
+                                        text = chapter.toString(),
+                                        color = Color.White.copy(alpha = 0.45f),
+                                        fontSize = 64.sp,
                                         fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 2.sp
                                     )
                                 }
                             }
                             items(verses, key = { "${it.book}-${it.chapter}-${it.verse}" }) { verse ->
                                 // Heading
                                 if (!verse.heading.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Spacer(modifier = Modifier.height(20.dp))
                                     Text(
                                         text = verse.heading,
                                         color = Color.White,
-                                        fontSize = 13.sp,
+                                        fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(bottom = 2.dp)
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 4.dp)
                                     )
                                     // Subheading
                                     if (!verse.subheading.isNullOrBlank()) {
                                         Text(
                                             text = verse.subheading,
                                             color = Color.Gray,
-                                            fontSize = 11.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.Normal,
-                                            modifier = Modifier.padding(bottom = 4.dp)
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            lineHeight = 18.sp,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
                                         )
                                     }
                                 }
                                 // Verse text
                                 val verseLabel = verse.display ?: verse.verse.toString()
+                                val hasHeading = !verse.heading.isNullOrBlank()
                                 Text(
                                     text = buildAnnotatedString {
                                         withStyle(SpanStyle(color = Color(0xFFAAAAAA), fontWeight = FontWeight.Bold, fontSize = 12.sp)) {
@@ -219,13 +219,103 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                                             append(verse.text.trim())
                                         }
                                     },
-                                    modifier = Modifier.padding(bottom = 12.dp),
+                                    modifier = Modifier.padding(
+                                        top = if (hasHeading) 16.dp else 0.dp,
+                                        bottom = 16.dp,
+                                        start = 2.dp
+                                    ),
                                     lineHeight = (fontSize * 1.5).sp
                                 )
                             }
                             item { Spacer(modifier = Modifier.height(24.dp)) }
                         }
                     }
+                }
+            }
+        }
+
+        // Bottom fade gradient
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(120.dp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            BackgroundDark.copy(alpha = 0.7f),
+                            BackgroundDark
+                        )
+                    )
+                )
+        )
+
+        // Floating buttons above nav bar
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .background(
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Prev chapter button
+            Surface(
+                onClick = {
+                    if (targetChapter > 1) {
+                        targetChapter -= 1
+                        vm.loadChapter(selectedBook, targetChapter)
+                    }
+                },
+                shape = RoundedCornerShape(10.dp),
+                color = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.size(34.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("‹", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light)
+                }
+            }
+
+            // Book + chapter selector button
+            Surface(
+                onClick = { showBookSelection = true },
+                shape = RoundedCornerShape(10.dp),
+                color = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.height(34.dp)
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$selectedBook  $targetChapter",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Next chapter button
+            Surface(
+                onClick = {
+                    val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
+                    if (targetChapter < maxChapter) {
+                        targetChapter += 1
+                        vm.loadChapter(selectedBook, targetChapter)
+                    }
+                },
+                shape = RoundedCornerShape(10.dp),
+                color = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.size(34.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("›", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light)
                 }
             }
         }
