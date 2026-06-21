@@ -1,6 +1,8 @@
 package com.bibleread.bread.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -26,16 +28,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import com.bibleread.bread.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bibleread.bread.ui.theme.BackgroundDark
 import com.bibleread.bread.viewmodel.BibleUiState
 import com.bibleread.bread.viewmodel.BibleViewModel
+import kotlinx.coroutines.delay
 
 val BIBLE_BOOKS = mapOf(
     // Old Testament
@@ -72,6 +78,10 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
     var fontSize by remember { mutableFloatStateOf(17f) }
     var showSettings by remember { mutableStateOf(false) }
 
+    // True after the first successful load � header animates in once, never again
+    var headerVisible by remember { mutableStateOf(false) }
+    var hasInitialized by remember { mutableStateOf(false) }
+
     val uiState by vm.uiState.collectAsState()
     val listState = rememberLazyListState()
 
@@ -88,6 +98,11 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                 targetIndex += 1 // spacer
             }
             listState.scrollToItem(targetIndex)
+
+            if (!hasInitialized) {
+                headerVisible = true
+                hasInitialized = true
+            }
         }
     }
 
@@ -97,39 +112,69 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                 .fillMaxSize()
                 .background(BackgroundDark)
         ) {
-            // Header — centered book name, settings top-right
+            // Header — centered book name, version left, settings right
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp, bottom = 16.dp),
+                    .padding(top = 8.dp, bottom = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = selectedBook,
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
+                val headerAlpha by animateFloatAsState(
+                    targetValue = if (headerVisible) 1f else 0f,
+                    animationSpec = tween(200),
+                    label = "headerAlpha"
                 )
-                // Settings button anchored to top-right
-                Surface(
-                    onClick = { showSettings = true },
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White.copy(alpha = 0.1f),
+                Box(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 16.dp)
-                        .size(32.dp)
+                        .fillMaxWidth()
+                        .graphicsLayer { alpha = headerAlpha },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                    Text(
+                        text = selectedBook,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        fontSize = 20.sp,
+                        modifier = Modifier.padding(horizontal = 56.dp),
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+
+                    // Version button anchored to left
+                    Surface(
+                        onClick = { /* TODO: version picker */ },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color.White.copy(alpha = 0.1f),
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 14.dp)
+                    ) {
+                        Text(
+                            text = "MBB",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    // Settings icon anchored to right
+                    IconButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 12.dp)
+                            .size(32.dp)
                     ) {
                         Icon(
-                            Icons.Default.Settings,
+                            painter = painterResource(R.drawable.ic_settings2),
                             contentDescription = "Settings",
-                            tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(15.dp)
+                            tint = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -138,14 +183,12 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
             // Content
             when (val state = uiState) {
                 is BibleUiState.Idle -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No Content", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
-                    }
+                    // Empty � content fades in when ready
+                    Box(modifier = Modifier.fillMaxSize())
                 }
                 is BibleUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color.White)
-                    }
+                    // Empty � no spinner, content fades in
+                    Box(modifier = Modifier.fillMaxSize())
                 }
                 is BibleUiState.Error -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -153,13 +196,23 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                     }
                 }
                 is BibleUiState.Success -> {
-                    val versesByChapter = state.verses.groupBy { it.chapter }
+                    var contentVisible by remember { mutableStateOf(false) }
+                    LaunchedEffect(state) {
+                        contentVisible = false
+                        delay(16) // one frame — forces a real false→true recomposition
+                        contentVisible = true
+                    }
+                    AnimatedVisibility(
+                        visible = contentVisible,
+                        enter = fadeIn(animationSpec = tween(200))
+                    ) {
+                        val versesByChapter = state.verses.groupBy { it.chapter }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 36.dp),
-                        contentPadding = PaddingValues(top = 0.dp, bottom = 120.dp)
+                        contentPadding = PaddingValues(top = 0.dp, bottom = 80.dp)
                     ) {
                         versesByChapter.forEach { (chapter, verses) ->
             item(key = "$selectedBook-$chapter-header") {
@@ -230,6 +283,7 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                             item { Spacer(modifier = Modifier.height(24.dp)) }
                         }
                     }
+                    } // end AnimatedVisibility
                 }
             }
         }
@@ -251,20 +305,16 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                 )
         )
 
-        // Floating buttons above nav bar
+        // Bottom bar — floating, no background, buttons align with verse edges
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
-                .background(
-                    color = Color.White.copy(alpha = 0.08f),
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .fillMaxWidth()
+                .padding(start = 36.dp, end = 36.dp, bottom = 16.dp, top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Prev chapter button
+            // Prev chapter button — smaller
             Surface(
                 onClick = {
                     if (targetChapter > 1) {
@@ -273,35 +323,45 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                     }
                 },
                 shape = RoundedCornerShape(10.dp),
-                color = Color.White.copy(alpha = 0.12f),
-                modifier = Modifier.size(34.dp)
+                color = Color(0xFF1A1A1A),
+                modifier = Modifier
+                    .size(width = 44.dp, height = 44.dp)
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("‹", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light)
-                }
-            }
-
-            // Book + chapter selector button
-            Surface(
-                onClick = { showBookSelection = true },
-                shape = RoundedCornerShape(10.dp),
-                color = Color.White.copy(alpha = 0.12f),
-                modifier = Modifier.height(34.dp)
-            ) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "$selectedBook  $targetChapter",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chevron_left),
+                        contentDescription = "Previous",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            // Next chapter button
+            // Book + chapter selector — wraps content with internal padding
+            Surface(
+                onClick = { showBookSelection = true },
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF1A1A1A),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$selectedBook $targetChapter",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                }
+            }
+
+            // Next chapter button — smaller
             Surface(
                 onClick = {
                     val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
@@ -311,11 +371,17 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
                     }
                 },
                 shape = RoundedCornerShape(10.dp),
-                color = Color.White.copy(alpha = 0.12f),
-                modifier = Modifier.size(34.dp)
+                color = Color(0xFF1A1A1A),
+                modifier = Modifier
+                    .size(width = 44.dp, height = 44.dp)
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("›", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light)
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chevron_right),
+                        contentDescription = "Next",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }

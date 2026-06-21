@@ -84,12 +84,12 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String, val icon: Int? = null, val label: String) {
-    object Splash : Screen("splash", label = "Splash")
-    object Reader : Screen("reader", R.drawable.ic_bibletab, "Bible")
-    object Search : Screen("search", R.drawable.ic_searchtab, "Search")
-    object Community : Screen("home", R.drawable.ic_commtab, "Community")
-    object Chats : Screen("chats", R.drawable.ic_chattab, "Chats")
-    object Profile : Screen("profile", R.drawable.ic_profiletab, "Profile")
+    object Splash    : Screen("splash", label = "Splash")
+    object Reader    : Screen("reader",    R.drawable.ic_bibletab,   "Bible")
+    object Search    : Screen("search",    R.drawable.ic_searchtab,  "Search")
+    object Profile   : Screen("profile",   R.drawable.ic_profiletab, "Profile")
+    object Community : Screen("home",      R.drawable.ic_commtab,    "Community")
+    object Chats     : Screen("chats",     R.drawable.ic_chattab,    "Chats")
 }
 
 @Composable
@@ -99,23 +99,21 @@ fun MainApp(dbReady: State<Boolean>) {
     val currentRoute = navBackStackEntry?.destination?.route
     val isDbReady by dbReady
 
-    // Track if user has left splash screen
     var splashDone by remember { mutableStateOf(false) }
+
+    // Hardcoded for now — flip to true once auth is implemented
+    val isLoggedIn by remember { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            // Permission result handled
-        }
+        onResult = { }
     )
 
-    val items = listOf(
-        Screen.Reader,
-        Screen.Search,
-        Screen.Community,
-        Screen.Chats,
-        Screen.Profile
-    )
+    // Tabs shown when logged out
+    val baseTabs = listOf(Screen.Reader, Screen.Search, Screen.Profile)
+    // Extra tabs unlocked after login
+    val loggedInTabs = listOf(Screen.Reader, Screen.Search, Screen.Community, Screen.Chats, Screen.Profile)
+    val items = if (isLoggedIn) loggedInTabs else baseTabs
 
     Scaffold(
         bottomBar = {
@@ -181,21 +179,21 @@ fun MainApp(dbReady: State<Boolean>) {
                 popExitTransition = { ExitTransition.None }
             ) {
                 composable(Screen.Splash.route) {
-                    SplashScreen(onModeSelected = { isOnline ->
+                    SplashScreen(onFinished = {
                         splashDone = true
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
-                        navController.navigate(Screen.Community.route) {
+                        navController.navigate(Screen.Reader.route) {
                             popUpTo(Screen.Splash.route) { inclusive = true }
                         }
                     })
                 }
+                composable(Screen.Reader.route)    { ReaderScreen() }
+                composable(Screen.Search.route)    { SearchScreen() }
+                composable(Screen.Profile.route)   { ProfileScreen(isLoggedIn = isLoggedIn) }
                 composable(Screen.Community.route) { HomeScreen() }
-                composable(Screen.Reader.route) { ReaderScreen() }
-                composable(Screen.Search.route) { SearchScreen() }
-                composable(Screen.Chats.route) { ChatsScreen() }
-                composable(Screen.Profile.route) { ProfileScreen() }
+                composable(Screen.Chats.route)     { ChatsScreen() }
             }
 
             // Loading overlay — shows after splash until DB is ready

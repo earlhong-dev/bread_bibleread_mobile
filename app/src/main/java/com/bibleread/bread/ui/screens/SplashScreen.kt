@@ -1,144 +1,62 @@
 package com.bibleread.bread.ui.screens
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bibleread.bread.R
-import com.bibleread.bread.ui.theme.*
+import com.bibleread.bread.ui.theme.BackgroundDark
+import com.bibleread.bread.ui.theme.BreadTan
+import kotlinx.coroutines.delay
 
 @Composable
-fun SplashScreen(onModeSelected: (Boolean) -> Unit) {
+fun SplashScreen(onFinished: () -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(600),
+        label = "splashAlpha"
+    )
+
+    LaunchedEffect(Unit) {
+        visible = true
+        delay(1800)
+        onFinished()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
-            .padding(16.dp),
-        contentAlignment = Alignment.TopCenter
+            .background(BackgroundDark),
+        contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.graphicsLayer { this.alpha = alpha }
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // Tan Bread Oval
+            // Bread oval logo
             Box(
                 modifier = Modifier
-                    .size(width = 80.dp, height = 50.dp)
+                    .size(width = 72.dp, height = 44.dp)
                     .clip(RoundedCornerShape(50))
                     .background(BreadTan)
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Streak Text
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = buildAnnotatedString {
-                    withStyle(SpanStyle(color = StreakGreen, fontWeight = FontWeight.Bold)) {
-                        append("67 Days ")
-                    }
-                    withStyle(SpanStyle(color = Color.White)) {
-                        append("daily bread eaten:\nYou are spiritually healthy!")
-                    }
-                },
-                textAlign = TextAlign.Center,
-                fontSize = 14.sp,
-                lineHeight = 18.sp
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Header
-            Text(
-                text = "Here's your daily bread!",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Daily Verse
-            Text(
-                text = "\"I sought the Lord, and he answered me;\nhe delivered me from all my fears.\"",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontStyle = FontStyle.Italic,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp),
-                lineHeight = 22.sp
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Psalms 34:4",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Action Icons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FavoriteBorder,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-        }
-
-        // Start Button at the bottom
-        Button(
-            onClick = { onModeSelected(false) }, // Mode no longer matters
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp)
-                .fillMaxWidth(0.8f),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                text = "READ BIBLE",
-                color = Color.Black,
+                text = "bread",
+                color = androidx.compose.ui.graphics.Color.White,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(vertical = 4.dp)
+                letterSpacing = 2.sp
             )
         }
     }

@@ -13,6 +13,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,7 +72,87 @@ class OpenImagesSAF : ActivityResultContracts.OpenDocument() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(isLoggedIn: Boolean = false) {
+    if (!isLoggedIn) {
+        ProfileSignInPrompt()
+        return
+    }
+    ProfileContent()
+}
+
+@Composable
+private fun ProfileSignInPrompt() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BackgroundDark),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 40.dp)
+        ) {
+            // Bread oval
+            Box(
+                modifier = Modifier
+                    .size(width = 56.dp, height = 34.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.15f))
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Sign in to unlock\ncommunity features",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                lineHeight = 28.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Join discussions, save highlights, and connect with other readers.",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+            Spacer(modifier = Modifier.height(36.dp))
+            Button(
+                onClick = { /* TODO: navigate to sign-in */ },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Sign In",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = { /* TODO: navigate to create account */ },
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Create Account",
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 15.sp,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileContent() {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showSheet by remember { mutableStateOf(false) }
