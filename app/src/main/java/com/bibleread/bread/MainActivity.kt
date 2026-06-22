@@ -189,8 +189,8 @@ fun MainApp(dbReady: State<Boolean>) {
                         }
                     })
                 }
-                composable(Screen.Reader.route)    { ReaderScreen() }
-                composable(Screen.Search.route)    { SearchScreen() }
+                composable(Screen.Reader.route)    { BibleScreen() }
+                composable(Screen.Search.route)    { JournalScreen() }
                 composable(Screen.Profile.route)   { ProfileScreen(isLoggedIn = isLoggedIn) }
                 composable(Screen.Community.route) { HomeScreen() }
                 composable(Screen.Chats.route)     { ChatsScreen() }

@@ -4,22 +4,22 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -66,7 +67,7 @@ val BIBLE_BOOKS = mapOf(
 )
 
 @Composable
-fun ReaderScreen(vm: BibleViewModel = viewModel()) {
+fun BibleScreen(vm: BibleViewModel = viewModel()) {
     val books = BIBLE_BOOKS.keys.toList()
 
     var selectedBook by remember { mutableStateOf("Genesis") }
@@ -441,89 +442,287 @@ fun ReaderScreen(vm: BibleViewModel = viewModel()) {
 
 // ── Book Selection Overlay ────────────────────────────────────────────────────
 
+private val OLD_TESTAMENT = listOf(
+    "Genesis","Exodo","Levitico","Mga Bilang","Deuteronomio","Josue","Mga Hukom","Ruth",
+    "1 Samuel","2 Samuel","1 Mga Hari","2 Mga Hari","1 Mga Cronica","2 Mga Cronica",
+    "Ezra","Nehemias","Ester","Job","Mga Awit","Mga Kawikaan","Ang Mangangaral",
+    "Ang Awit ni Solomon","Isaias","Jeremias","Mga Panaghoy","Ezekiel","Daniel",
+    "Hosea","Joel","Amos","Obadias","Jonas","Mikas","Nahum","Habakuk","Zefanias",
+    "Hagai","Zacarias","Malakias"
+)
+
+private val NEW_TESTAMENT = listOf(
+    "Mateo","Marcos","Lucas","Juan","Mga Gawa","Mga Taga-Roma",
+    "1 Mga Taga-Corinto","2 Mga Taga-Corinto","Mga Taga-Galacia","Mga Taga-Efeso",
+    "Mga Taga-Filipos","Mga Taga-Colosas","1 Mga Taga-Tesalonica","2 Mga Taga-Tesalonica",
+    "1 Timoteo","2 Timoteo","Tito","Filemon","Mga Hebreo","Santiago",
+    "1 Pedro","2 Pedro","1 Juan","2 Juan","3 Juan","Judas","Pahayag"
+)
+
 @Composable
 fun BookSelectionOverlay(
     books: List<String>,
     onBookSelected: (String, Int) -> Unit,
     onClose: () -> Unit
 ) {
-    var step by remember { mutableIntStateOf(1) }
-    var tempSelectedBook by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var expandedBook by remember { mutableStateOf<String?>(null) }
+
+    val query = searchQuery.trim().lowercase()
+
+    // When searching: flat ranked list (starts-with first, then word-starts-with, then contains)
+    // When empty: keep OT/NT split
+    data class RankedBook(val name: String, val rank: Int) // rank 0=best
+
+    fun rankBook(name: String, q: String): Int? {
+        val n = name.lowercase()
+        return when {
+            n.startsWith(q) -> 0
+            n.split(" ").any { it.startsWith(q) } -> 1
+            n.contains(q) -> 2
+            else -> null
+        }
+    }
+
+    val isSearching = query.isNotEmpty()
+    val rankedResults = if (isSearching) {
+        (OLD_TESTAMENT + NEW_TESTAMENT)
+            .mapNotNull { book -> rankBook(book, query)?.let { RankedBook(book, it) } }
+            .sortedWith(compareBy({ it.rank }, { it.name }))
+            .map { it.name }
+    } else emptyList()
+
+    val filteredOT = if (!isSearching) OLD_TESTAMENT
+                     else emptyList()
+    val filteredNT = if (!isSearching) NEW_TESTAMENT
+                     else emptyList()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark)
     ) {
-        Row(
+        // ── Header ────────────────────────────────────────────────────────────
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(top = 20.dp, bottom = 12.dp),
+            contentAlignment = Alignment.Center
         ) {
-            if (step == 2) {
-                IconButton(onClick = { step = 1 }) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
-                    )
-                }
-            }
             Text(
-                text = if (step == 1) "Books" else tempSelectedBook,
+                text = "Scripture",
                 color = Color.White,
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
+                fontWeight = FontWeight.Bold
             )
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+                    .size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
-        if (step == 1) {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(books) { book ->
-                    Text(
-                        text = book,
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                tempSelectedBook = book
-                                step = 2
-                            }
-                            .padding(16.dp)
+        // ── Search ────────────────────────────────────────────────────────────
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color.White,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 0.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_search),
+                    contentDescription = null,
+                    tint = Color.Black.copy(alpha = 0.4f),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (searchQuery.isEmpty()) {
+                        Text(
+                            "Search book...",
+                            color = Color.Black.copy(alpha = 0.35f),
+                            fontSize = 15.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = {
+                            searchQuery = it
+                            expandedBook = null
+                        },
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = Color.Black,
+                            fontSize = 15.sp,
+                            lineHeight = 15.sp
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                // Always reserve space; invisible when empty
+                IconButton(
+                    onClick = { searchQuery = "" },
+                    modifier = Modifier.size(20.dp),
+                    enabled = searchQuery.isNotEmpty()
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Clear",
+                        tint = if (searchQuery.isNotEmpty())
+                            Color.Black.copy(alpha = 0.5f)
+                        else
+                            Color.Transparent,
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
-        } else {
-            val chapters = BIBLE_BOOKS[tempSelectedBook] ?: 1
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(60.dp),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ── Book list ─────────────────────────────────────────────────────────
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            if (isSearching) {
+                // Flat ranked results — no testament headers
+                items(rankedResults) { book ->
+                    BookRow(
+                        book = book,
+                        isExpanded = expandedBook == book,
+                        onToggle = { expandedBook = if (expandedBook == book) null else book },
+                        onChapterSelected = { chapter -> onBookSelected(book, chapter) }
+                    )
+                }
+            } else {
+                if (filteredOT.isNotEmpty()) {
+                    item { TestamentLabel("Old Testament") }
+                    items(filteredOT) { book ->
+                        BookRow(
+                            book = book,
+                            isExpanded = expandedBook == book,
+                            onToggle = { expandedBook = if (expandedBook == book) null else book },
+                            onChapterSelected = { chapter -> onBookSelected(book, chapter) }
+                        )
+                    }
+                }
+                if (filteredNT.isNotEmpty()) {
+                    item { TestamentLabel("New Testament") }
+                    items(filteredNT) { book ->
+                        BookRow(
+                            book = book,
+                            isExpanded = expandedBook == book,
+                            onToggle = { expandedBook = if (expandedBook == book) null else book },
+                            onChapterSelected = { chapter -> onBookSelected(book, chapter) }
+                        )
+                    }
+                }
+            }
+            item { Spacer(modifier = Modifier.height(40.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun TestamentLabel(label: String) {
+    Text(
+        text = label,
+        color = Color.White,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 0.5.sp,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BookRow(
+    book: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onChapterSelected: (Int) -> Unit
+) {
+    val chapters = BIBLE_BOOKS[book] ?: 1
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = book,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Chapter grid — smooth expand/collapse
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn(tween(200)) + expandVertically(tween(250)),
+            exit = fadeOut(tween(150)) + shrinkVertically(tween(200))
+        ) {
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items((1..chapters).toList()) { chapter ->
+                (1..chapters).forEach { chapter ->
                     Surface(
-                        onClick = { onBookSelected(tempSelectedBook, chapter) },
+                        onClick = { onChapterSelected(chapter) },
                         shape = RoundedCornerShape(8.dp),
-                        color = Color.White.copy(alpha = 0.1f)
+                        color = Color.White.copy(alpha = 0.08f),
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Box(
-                            modifier = Modifier.size(50.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = chapter.toString(), color = Color.White)
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = chapter.toString(),
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
+
+        HorizontalDivider(
+            color = Color.White.copy(alpha = 0.06f),
+            thickness = 0.5.dp,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
     }
 }
 
