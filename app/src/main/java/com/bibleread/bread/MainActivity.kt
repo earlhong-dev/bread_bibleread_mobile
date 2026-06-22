@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
 sealed class Screen(val route: String, val icon: Int? = null, val label: String) {
     object Splash    : Screen("splash", label = "Splash")
     object Reader    : Screen("reader",    R.drawable.ic_bibletab,   "Bible")
-    object Search    : Screen("search",    R.drawable.ic_searchtab,  "Search")
+    object Search    : Screen("search",    R.drawable.ic_journaltab,  "Journal")
     object Profile   : Screen("profile",   R.drawable.ic_profiletab, "Profile")
     object Community : Screen("home",      R.drawable.ic_commtab,    "Community")
     object Chats     : Screen("chats",     R.drawable.ic_chattab,    "Chats")
