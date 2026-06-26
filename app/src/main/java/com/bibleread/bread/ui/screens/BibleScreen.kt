@@ -12,17 +12,18 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateSet
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bibleread.bread.R
+import com.bibleread.bread.data.TranslationManager
 import com.bibleread.bread.ui.theme.BackgroundDark
 import com.bibleread.bread.viewmodel.BibleUiState
 import com.bibleread.bread.viewmodel.BibleViewModel
@@ -76,8 +78,16 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
 
     var fontSize by remember { mutableFloatStateOf(17f) }
     var showSettings by remember { mutableStateOf(false) }
+    var showTranslationPicker by remember { mutableStateOf(false) }
+
+    // Highlights panel — shown when any verse is selected
+    var showHighlightsPanel by remember { mutableStateOf(false) }
+    val selectedVerses = remember { mutableStateSetOf<String>() }
+
+    val highlights = vm.highlights
 
     val uiState by vm.uiState.collectAsState()
+    val activeTranslation by vm.activeTranslation.collectAsState()
     val listState = rememberLazyListState()
 
     // ── Animation state ──────────────────────────────────────────────────────
@@ -174,7 +184,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
 
                 // Version button — left
                 Surface(
-                    onClick = { /* TODO: version picker */ },
+                    onClick = { showTranslationPicker = true },
                     shape = RoundedCornerShape(6.dp),
                     color = Color.White.copy(alpha = 0.1f),
                     modifier = Modifier
@@ -182,7 +192,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         .padding(start = 14.dp)
                 ) {
                     Text(
-                        text = "MBB",
+                        text = TranslationManager.displayName(activeTranslation),
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -225,6 +235,12 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                 }
                 is BibleUiState.Success -> {
                     val versesByChapter = state.verses.groupBy { it.chapter }
+
+                    // Auto-show/hide highlights panel with selection
+                    LaunchedEffect(selectedVerses.size) {
+                        if (selectedVerses.isEmpty()) showHighlightsPanel = false
+                    }
+
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -277,31 +293,63 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                         )
                                     }
                                 }
-                                val verseLabel = verse.display ?: verse.verse.toString()
-                                val hasHeading = !verse.heading.isNullOrBlank()
-                                Text(
-                                    text = buildAnnotatedString {
-                                        withStyle(
-                                            SpanStyle(
-                                                color = Color(0xFFAAAAAA),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp
-                                            )
-                                        ) { append("$verseLabel  ") }
-                                        withStyle(
-                                            SpanStyle(
-                                                color = Color.White,
-                                                fontSize = fontSize.sp
-                                            )
-                                        ) { append(verse.text.trim()) }
-                                    },
-                                    modifier = Modifier.padding(
-                                        top = if (hasHeading) 16.dp else 0.dp,
-                                        bottom = 16.dp,
-                                        start = 2.dp
-                                    ),
-                                    lineHeight = (fontSize * 1.5).sp
-                                )
+
+                                val verseKey      = "${verse.book}-${verse.chapter}-${verse.verse}"
+                                val isSelected    = verseKey in selectedVerses
+                                val highlightColor = highlights[verseKey]
+                                val verseLabel    = verse.display ?: verse.verse.toString()
+                                val hasHeading    = !verse.heading.isNullOrBlank()
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(
+                                            if (highlightColor != null)
+                                                Modifier.background(
+                                                    highlightColor.copy(alpha = 0.25f),
+                                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
+                                                )
+                                            else Modifier
+                                        )
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            if (isSelected) selectedVerses.remove(verseKey)
+                                            else selectedVerses.add(verseKey)
+                                        }
+                                        .padding(
+                                            top = if (hasHeading) 16.dp else 0.dp,
+                                            bottom = 16.dp,
+                                            start = 2.dp,
+                                            end = 2.dp
+                                        )
+                                ) {
+                                    Text(
+                                        text = buildAnnotatedString {
+                                            withStyle(
+                                                SpanStyle(
+                                                    color = Color(0xFFAAAAAA),
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    textDecoration = if (isSelected)
+                                                        androidx.compose.ui.text.style.TextDecoration.Underline
+                                                    else null
+                                                )
+                                            ) { append("$verseLabel  ") }
+                                            withStyle(
+                                                SpanStyle(
+                                                    color = Color.White,
+                                                    fontSize = fontSize.sp,
+                                                    textDecoration = if (isSelected)
+                                                        androidx.compose.ui.text.style.TextDecoration.Underline
+                                                    else null
+                                                )
+                                            ) { append(verse.text.trim()) }
+                                        },
+                                        lineHeight = (fontSize * 1.5).sp
+                                    )
+                                }
                             }
                             item { Spacer(modifier = Modifier.height(24.dp)) }
                         }
@@ -327,89 +375,213 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                 )
         )
 
-        // ── Bottom bar (slides up from behind nav bar on first load) ──────────
+        // ── Bottom bar ────────────────────────────────────────────────────────
+        // Row 1 (prev/book/next) + Row 2 (selection actions) stacked in a Column
         AnimatedVisibility(
             visible = bottomBarReady,
             enter = slideInVertically(animationSpec = tween(400)) { it } + fadeIn(tween(400)),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Row(
+            val hasSelection = selectedVerses.isNotEmpty()
+
+            // Build verse range label: "Genesis 1:1" or "Genesis 1:1-4"
+            val verseRangeLabel = run {
+                val verseNums = selectedVerses
+                    .filter { it.startsWith("$selectedBook-$targetChapter-") }
+                    .mapNotNull { it.substringAfterLast("-").toIntOrNull() }
+                    .sorted()
+                if (verseNums.isEmpty()) "$selectedBook $targetChapter"
+                else if (verseNums.size == 1) "$selectedBook $targetChapter:${verseNums.first()}"
+                else "$selectedBook $targetChapter:${verseNums.first()}-${verseNums.last()}"
+            }
+
+            // Use Box so Row 2 slides over Row 1 from the same position
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 36.dp, end = 36.dp, bottom = 16.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+                contentAlignment = Alignment.BottomCenter
             ) {
-                // Prev chapter
-                Surface(
-                    onClick = {
-                        if (targetChapter > 1) {
-                            requestChapter(selectedBook, targetChapter - 1)
-                        }
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF1A1A1A),
-                    modifier = Modifier.size(width = 44.dp, height = 44.dp)
+                // ── Row 1: prev / book+chapter / next ─────────────────────────
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp), // keeps row 1 at original 36dp margin
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_chevron_left),
-                            contentDescription = "Previous",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    // Prev
+                    Surface(
+                        onClick = {
+                            if (targetChapter > 1) requestChapter(selectedBook, targetChapter - 1)
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF1A1A1A),
+                        modifier = Modifier.size(width = 44.dp, height = 44.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_chevron_left),
+                                contentDescription = "Previous",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Book + chapter selector
+                    Surface(
+                        onClick = { showBookSelection = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF1A1A1A),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "$selectedBook $targetChapter",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            )
+                        }
+                    }
+
+                    // Next
+                    Surface(
+                        onClick = {
+                            val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
+                            if (targetChapter < maxChapter) requestChapter(selectedBook, targetChapter + 1)
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF1A1A1A),
+                        modifier = Modifier.size(width = 44.dp, height = 44.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_chevron_right),
+                                contentDescription = "Next",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
 
-                // Book + chapter selector
-                Surface(
-                    onClick = { showBookSelection = true },
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF1A1A1A),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
+                // ── Row 2: selection actions — slides up over Row 1 ───────────
+                AnimatedVisibility(
+                    visible = hasSelection,
+                    enter = slideInVertically(tween(300)) { it } + fadeIn(tween(300)),
+                    exit = slideOutVertically(tween(250)) { it } + fadeOut(tween(200))
                 ) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Color(0xFF111111),
+                                shape = RoundedCornerShape(36.dp)
+                            )
+                            .padding(14.dp)
                     ) {
-                        Text(
-                            text = "$selectedBook $targetChapter",
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 12.dp)
-                        )
-                    }
-                }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Verse range label — same radius as circles (22dp)
+                            Surface(
+                                onClick = { },
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color(0xFF1A1A1A),
+                                modifier = Modifier.weight(1f).height(44.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = verseRangeLabel,
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 10.dp)
+                                    )
+                                }
+                            }
 
-                // Next chapter
-                Surface(
-                    onClick = {
-                        val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
-                        if (targetChapter < maxChapter) {
-                            requestChapter(selectedBook, targetChapter + 1)
+                            // Highlight button — circle
+                            Surface(
+                                onClick = { showHighlightsPanel = true },
+                                shape = CircleShape,
+                                color = Color(0xFF1A1A1A),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_highlight),
+                                        contentDescription = "Highlight",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            // Draw button — circle
+                            Surface(
+                                onClick = { },
+                                shape = CircleShape,
+                                color = Color(0xFF1A1A1A),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_draw),
+                                        contentDescription = "Draw",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            // X — circle
+                            Surface(
+                                onClick = {
+                                    selectedVerses.clear()
+                                    showHighlightsPanel = false
+                                },
+                                shape = CircleShape,
+                                color = Color(0xFF1A1A1A),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_close),
+                                        contentDescription = "Clear selection",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
-                    },
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF1A1A1A),
-                    modifier = Modifier.size(width = 44.dp, height = 44.dp)
-                ) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_chevron_right),
-                            contentDescription = "Next",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
                 }
             }
         }
 
         // ── Settings overlay ──────────────────────────────────────────────────
+        if (showSettings) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { /* consume all touches behind overlay */ }
+            )
+        }
         AnimatedVisibility(
             visible = showSettings,
             enter = slideInVertically { it } + fadeIn(),
@@ -422,7 +594,44 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             )
         }
 
+        // ── Translation picker overlay ────────────────────────────────────────
+        if (showTranslationPicker) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { }
+            )
+        }
+        AnimatedVisibility(
+            visible = showTranslationPicker,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut()
+        ) {
+            TranslationPickerOverlay(
+                translations = vm.availableTranslations,
+                activeTranslation = activeTranslation,
+                onSelected = { code ->
+                    showTranslationPicker = false
+                    vm.switchTranslation(code)
+                },
+                onClose = { showTranslationPicker = false }
+            )
+        }
+
         // ── Book selection overlay ────────────────────────────────────────────
+        if (showBookSelection) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { }
+            )
+        }
         AnimatedVisibility(
             visible = showBookSelection,
             enter = slideInVertically { it } + fadeIn(),
@@ -435,6 +644,26 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     requestChapter(book, chapter)
                 },
                 onClose = { showBookSelection = false }
+            )
+        }
+
+        // ── Highlights panel ─────────────────────────────────────────────────
+        AnimatedVisibility(
+            visible = showHighlightsPanel,
+            enter = slideInVertically { it } + fadeIn(tween(200)),
+            exit = slideOutVertically { it } + fadeOut(tween(150)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            HighlightsPanel(
+                onColorSelected = { color ->
+                    vm.applyHighlight(selectedVerses.toSet(), color)
+                    selectedVerses.clear()
+                    showHighlightsPanel = false
+                },
+                onDismiss = {
+                    selectedVerses.clear()
+                    showHighlightsPanel = false
+                }
             )
         }
     }
@@ -523,7 +752,7 @@ fun BookSelectionOverlay(
                     .size(32.dp)
             ) {
                 Icon(
-                    Icons.Default.Close,
+                    painterResource(R.drawable.ic_close),
                     contentDescription = "Close",
                     tint = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp)
@@ -588,7 +817,7 @@ fun BookSelectionOverlay(
                     enabled = searchQuery.isNotEmpty()
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        painterResource(R.drawable.ic_close),
                         contentDescription = "Clear",
                         tint = if (searchQuery.isNotEmpty())
                             Color.Black.copy(alpha = 0.5f)
@@ -753,7 +982,7 @@ fun AppearanceSettingsOverlay(
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                Icon(painterResource(R.drawable.ic_close), contentDescription = "Close", tint = Color.White)
             }
         }
 
@@ -810,5 +1039,230 @@ fun AppearanceSettingsOverlay(
                 )
             }
         }
+    }
+}
+
+// ── Translation Picker Overlay ────────────────────────────────────────────────
+
+@Composable
+fun TranslationPickerOverlay(
+    translations: List<String>,
+    activeTranslation: String,
+    onSelected: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BackgroundDark)
+    ) {
+        // Header
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 20.dp, bottom = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Bible Translation",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+                    .size(32.dp)
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_close),
+                    contentDescription = "Close",
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        if (translations.isEmpty()) {
+            // No pre-built translations yet — only one is available (currently parsing)
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No additional translations available.\nAdd .db files to assets/translations/.",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(32.dp)
+                )
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(translations) { code ->
+                    val isActive = code == activeTranslation
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelected(code) }
+                            .padding(horizontal = 20.dp, vertical = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = TranslationManager.displayName(code),
+                                color = Color.White,
+                                fontSize = 17.sp,
+                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                            )
+                            Text(
+                                text = code,
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        if (isActive) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(
+                                        color = Color.White,
+                                        shape = RoundedCornerShape(50)
+                                    )
+                            )
+                        }
+                    }
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.07f),
+                        thickness = 0.5.dp,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
+                item { Spacer(modifier = Modifier.height(40.dp)) }
+            }
+        }
+    }
+}
+
+// ── Highlights Panel ─────────────────────────────────────────────────────────
+
+private val HIGHLIGHT_COLORS = listOf(
+    Color(0xFFFFEB3B), // Yellow
+    Color(0xFF4CAF50), // Green
+    Color(0xFF2196F3), // Blue
+    Color(0xFFFF9800), // Orange
+    Color(0xFFE91E63), // Pink
+    Color(0xFF9C27B0), // Purple
+)
+
+@Composable
+fun HighlightsPanel(
+    onColorSelected: (Color) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedColor by remember { mutableStateOf<Color?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Color(0xFF1A1A1A),
+                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+            )
+            .padding(horizontal = 24.dp, vertical = 20.dp)
+    ) {
+        // Handle bar
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(2.dp))
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Highlight",
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Color circles row
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HIGHLIGHT_COLORS.forEach { color ->
+                val isChosen = selectedColor == color
+                Box(
+                    modifier = Modifier
+                        .size(if (isChosen) 40.dp else 34.dp)
+                        .background(color, CircleShape)
+                        .then(
+                            if (isChosen) Modifier.border(
+                                width = 2.5.dp,
+                                color = Color.White,
+                                shape = CircleShape
+                            ) else Modifier
+                        )
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { selectedColor = color }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Action buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Cancel
+            Surface(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White.copy(alpha = 0.08f),
+                modifier = Modifier.weight(1f).height(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text("Cancel", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+                }
+            }
+
+            // Apply checkmark
+            Surface(
+                onClick = {
+                    selectedColor?.let { onColorSelected(it) }
+                },
+                shape = RoundedCornerShape(12.dp),
+                color = if (selectedColor != null) Color.White else Color.White.copy(alpha = 0.15f),
+                modifier = Modifier.weight(1f).height(44.dp),
+                enabled = selectedColor != null
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        text = "Apply",
+                        color = if (selectedColor != null) Color.Black else Color.White.copy(alpha = 0.3f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }

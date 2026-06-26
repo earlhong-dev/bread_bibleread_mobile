@@ -1,48 +1,28 @@
 package com.bibleread.bread.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = BreadTan,
-    secondary = FellowshipPurple,
-    tertiary = PersonalBibleGreen,
-    background = BackgroundDark,
-    surface = DarkGray,
-    onPrimary = Color.Black,
-    onSecondary = Color.White,
-    onTertiary = Color.Black,
+    primary      = BreadTan,
+    secondary    = FellowshipPurple,
+    tertiary     = PersonalBibleGreen,
+    background   = BackgroundDark,
+    surface      = DarkGray,
+    onPrimary    = Color.Black,
+    onSecondary  = Color.White,
+    onTertiary   = Color.Black,
     onBackground = Color.White,
-    onSurface = Color.White
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = BreadTan,
-    secondary = FellowshipPurple,
-    tertiary = PersonalBibleGreen,
-    background = Color.White,
-    surface = Color.White,
-    onPrimary = Color.Black,
-    onSecondary = Color.White,
-    onTertiary = Color.Black,
-    onBackground = Color.Black,
-    onSurface = Color.Black
+    onSurface    = Color.White
 )
 
 @Composable
-fun BreadTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
-) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
+fun BreadTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+        colorScheme = DarkColorScheme,
+        typography  = Typography,
+        content     = content
     )
 }

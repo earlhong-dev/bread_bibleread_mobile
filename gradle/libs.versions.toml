@@ -1,48 +1,56 @@
 [versions]
-agp = "9.2.1"
-coreKtx = "1.19.0"
-junit = "4.13.2"
-junitVersion = "1.3.0"
-espressoCore = "3.7.0"
-lifecycleRuntimeKtx = "2.6.1"
-activityCompose = "1.8.0"
-navigationCompose = "2.9.8"
-materialIconsExtended = "1.7.8"
-coil = "2.7.0"
-kotlin = "2.2.10"
-ksp = "2.2.10-2.0.2"
-composeBom = "2026.02.01"
-coreSplashScreen = "1.0.1"
+agp                      = "9.2.1"
+kotlin                   = "2.2.10"
+ksp                      = "2.2.10-2.0.2"
+composeBom               = "2026.02.01"
+coreKtx                  = "1.19.0"
+coreSplashScreen         = "1.0.1"
+coil                     = "2.7.0"
+room                     = "2.7.1"
+navigationCompose        = "2.7.7"
 lifecycleViewmodelCompose = "2.8.7"
-room = "2.7.1"
+lifecycleRuntimeKtx      = "2.8.7"
+activityCompose          = "1.9.3"
+
+# Test only
+junit                    = "4.13.2"
+junitVersion             = "1.3.0"
+espressoCore             = "3.7.0"
 
 [libraries]
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashScreen" }
-junit = { group = "junit", name = "junit", version.ref = "junit" }
-androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
-androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
-androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
-androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
-androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
-androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
-androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+# Core
+androidx-core-ktx                  = { group = "androidx.core",      name = "core-ktx",              version.ref = "coreKtx" }
+androidx-core-splashscreen         = { group = "androidx.core",      name = "core-splashscreen",     version.ref = "coreSplashScreen" }
+
+# Compose — versions managed by BOM
+androidx-compose-bom               = { group = "androidx.compose",   name = "compose-bom",           version.ref = "composeBom" }
+androidx-compose-ui                = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
-coil-svg = { group = "io.coil-kt", name = "coil-svg", version.ref = "coil" }
-androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-compose-material3         = { group = "androidx.compose.material3", name = "material3" }
+androidx-activity-compose          = { group = "androidx.activity",  name = "activity-compose",              version.ref = "activityCompose" }
+androidx-navigation-compose        = { group = "androidx.navigation", name = "navigation-compose",             version.ref = "navigationCompose" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose",  version.ref = "lifecycleViewmodelCompose" }
+androidx-lifecycle-runtime-ktx     = { group = "androidx.lifecycle",  name = "lifecycle-runtime-ktx",         version.ref = "lifecycleRuntimeKtx" }
+
+# Image loading — coil-compose only (no SVG, no unused decoders)
+coil-compose                       = { group = "io.coil-kt",         name = "coil-compose",          version.ref = "coil" }
+
+# Room
+room-runtime                       = { group = "androidx.room",      name = "room-runtime",          version.ref = "room" }
+room-ktx                           = { group = "androidx.room",      name = "room-ktx",              version.ref = "room" }
+room-compiler                      = { group = "androidx.room",      name = "room-compiler",         version.ref = "room" }
+
+# Test
+junit                              = { group = "junit",              name = "junit",                 version.ref = "junit" }
+androidx-junit                     = { group = "androidx.test.ext",  name = "junit",                 version.ref = "junitVersion" }
+androidx-espresso-core             = { group = "androidx.test.espresso", name = "espresso-core",     version.ref = "espressoCore" }
+androidx-compose-ui-test-junit4    = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+
+# Debug only
+androidx-compose-ui-tooling        = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-test-manifest  = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 
 [plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-
+android-application = { id = "com.android.application",            version.ref = "agp" }
+kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp                 = { id = "com.google.devtools.ksp",             version.ref = "ksp" }

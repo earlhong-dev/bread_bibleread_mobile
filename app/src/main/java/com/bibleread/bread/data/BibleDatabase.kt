@@ -30,17 +30,8 @@ interface VerseDao {
     @Query("SELECT * FROM verses WHERE book = :book AND chapter = :chapter ORDER BY verse ASC")
     suspend fun getChapter(book: String, chapter: Int): List<VerseEntity>
 
-    @Query("SELECT * FROM verses WHERE book = :book ORDER BY chapter ASC, verse ASC")
-    suspend fun getBook(book: String): List<VerseEntity>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(verses: List<VerseEntity>)
-
-    @Query("SELECT EXISTS(SELECT 1 FROM verses WHERE book = :book LIMIT 1)")
-    fun isBookDownloaded(book: String): Flow<Boolean>
-
-    @Query("SELECT DISTINCT book FROM verses")
-    fun getDownloadedBooks(): Flow<List<String>>
 
     @Query("SELECT COUNT(*) FROM verses")
     suspend fun getTotalVerseCount(): Int
@@ -70,17 +61,65 @@ abstract class BibleDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
 
     companion object {
-        @Volatile private var INSTANCE: BibleDatabase? = null
+        // Cache open databases by translation code so we don't reopen on every read
+        @Volatile private var instances: MutableMap<String, BibleDatabase> = mutableMapOf()
 
-        fun getInstance(context: Context): BibleDatabase =
-            INSTANCE ?: synchronized(this) {
-                INSTANCE ?: Room.databaseBuilder(
-                    context.applicationContext,
-                    BibleDatabase::class.java,
-                    "bible.db"
-                )
-                .fallbackToDestructiveMigration()
-                .build().also { INSTANCE = it }
+        /**
+         * Returns a database instance for the given translation code.
+         *
+         * Auto-detection logic (no manual flag needed):
+         *  - If  assets/translations/<code>.db  exists  →  load from asset (pre-built, fast)
+         *  - Otherwise                                  →  open empty DB (will be filled by parser)
+         */
+        fun getInstance(context: Context, translationCode: String): BibleDatabase {
+            return instances[translationCode] ?: synchronized(this) {
+                instances[translationCode] ?: buildDatabase(context, translationCode)
+                    .also { instances[translationCode] = it }
             }
+        }
+
+        /**
+         * Convenience overload — uses the user's currently selected translation.
+         */
+        fun getInstance(context: Context): BibleDatabase {
+            val code = TranslationManager.getActiveTranslation(context)
+            return getInstance(context, code)
+        }
+
+        /**
+         * Call this when the user switches translations so the next
+         * getInstance() opens the new DB fresh.
+         */
+        fun clearInstance(translationCode: String) {
+            synchronized(this) {
+                instances.remove(translationCode)
+            }
+        }
+
+        private fun buildDatabase(context: Context, translationCode: String): BibleDatabase {
+            val dbName    = TranslationManager.dbName(translationCode)
+            val assetPath = TranslationManager.assetPath(translationCode)
+
+            val builder = Room.databaseBuilder(
+                context.applicationContext,
+                BibleDatabase::class.java,
+                dbName
+            ).fallbackToDestructiveMigration()
+
+            // Check if a pre-built .db exists in assets/translations/
+            val hasPrebuilt = try {
+                context.assets.open(assetPath).use { true }
+            } catch (e: Exception) {
+                false
+            }
+
+            if (hasPrebuilt) {
+                // Phase 2: load from the shipped asset — zero parse time on first launch
+                builder.createFromAsset(assetPath)
+            }
+            // Phase 1 (no asset yet): opens an empty DB; BibleXmlParser will populate it
+
+            return builder.build()
+        }
     }
 }

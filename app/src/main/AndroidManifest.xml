@@ -18,6 +18,7 @@
         android:label="@string/app_name"
         android:roundIcon="@drawable/bread_logo"
         android:supportsRtl="true"
+        android:extractNativeLibs="false"
         android:theme="@style/Theme.Bread">
         <activity
             android:name=".MainActivity"

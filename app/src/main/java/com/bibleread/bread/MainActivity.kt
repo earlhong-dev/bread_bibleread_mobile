@@ -3,6 +3,8 @@ package com.bibleread.bread
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -16,6 +18,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,24 +37,65 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bibleread.bread.data.BibleDatabase
 import com.bibleread.bread.data.BibleXmlParser
+import com.bibleread.bread.data.DbExporter
+import com.bibleread.bread.data.TranslationManager
 import com.bibleread.bread.ui.screens.*
 import com.bibleread.bread.ui.theme.BreadTheme
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+/**
+ * Scans assets/ for any .xml files and parses them into a database if:
+ *   a) the translation has no pre-built .db in assets/translations/, AND
+ *   b) the on-device DB for that translation is empty
+ *
+ * After parsing it exports the .db so you can pull it with Device File Explorer.
+ * Once you place the .db in assets/translations/ and remove the .xml,
+ * this function skips that translation entirely — no code changes needed.
+ */
+suspend fun parseAllPendingXmlFiles(context: android.content.Context) {
+    val xmlFiles = try {
+        context.assets.list("")
+            ?.filter { it.endsWith(".xml") }
+            ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    for (xmlFile in xmlFiles) {
+        val translationCode = xmlFile.removeSuffix(".xml")
+        val assetPath       = TranslationManager.assetPath(translationCode)
+
+        // Skip if a pre-built DB already exists in assets/translations/
+        val hasPrebuilt = try { context.assets.open(assetPath).use { true } } catch (e: Exception) { false }
+        if (hasPrebuilt) continue
+
+        // Parse only if the on-device DB is empty
+        val db    = BibleDatabase.getInstance(context, translationCode)
+        val count = db.verseDao().getTotalVerseCount()
+        if (count == 0) {
+            android.util.Log.d("MainActivity", "Parsing $xmlFile ...")
+            BibleXmlParser.parse(context, db.verseDao(), xmlFile)
+            // Export the freshly-populated DB so you can pull it and ship it as a pre-built asset
+            DbExporter.exportFromXml(context, xmlFile)
+            android.util.Log.d("MainActivity", "Done. DB ready at: " +
+                "data/data/com.bibleread.bread/databases/$translationCode.db")
+        }
+    }
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -59,17 +103,16 @@ class MainActivity : ComponentActivity() {
     val dbReady: State<Boolean> = _dbReady
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val t0 = SystemClock.elapsedRealtime()
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Parse XML into database on first launch (runs in background)
-        CoroutineScope(Dispatchers.IO).launch {
-            val db = BibleDatabase.getInstance(applicationContext)
-            val count = db.verseDao().getTotalVerseCount()
-            if (count == 0) {
-                BibleXmlParser.parse(applicationContext, db.verseDao(), "mbbtag05.xml")
-            }
+        // lifecycleScope is tied to the Activity — no coroutine leak on rotation or finish
+        lifecycleScope.launch(Dispatchers.IO) {
+            parseAllPendingXmlFiles(applicationContext)
+            val elapsed = SystemClock.elapsedRealtime() - t0
+            Log.d("Bread.Startup", "DB init done in ${elapsed}ms")
             withContext(Dispatchers.Main) {
                 _dbReady.value = true
             }
@@ -220,21 +263,9 @@ fun BibleLoadingOverlay() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .alpha(1f),
+            .background(Color.Black.copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center
     ) {
-        // Semi-transparent dark scrim
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .alpha(0.92f)
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Black.copy(alpha = 0.92f)
-            ) {}
-        }
-
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
