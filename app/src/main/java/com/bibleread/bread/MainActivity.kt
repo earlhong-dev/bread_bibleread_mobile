@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -163,7 +164,7 @@ fun MainApp(dbReady: State<Boolean>) {
             if (currentRoute != Screen.Splash.route) {
                 Column {
                     HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         thickness = 0.5.dp,
                         color = Color.DarkGray
                     )
@@ -172,8 +173,8 @@ fun MainApp(dbReady: State<Boolean>) {
                         contentColor = Color.White,
                         tonalElevation = 0.dp,
                         modifier = Modifier
+                            .fillMaxWidth()
                             .height(72.dp)
-                            .padding(horizontal = 16.dp)
                             .padding(top = 4.dp, bottom = 4.dp)
                     ) {
                         items.forEach { screen ->
