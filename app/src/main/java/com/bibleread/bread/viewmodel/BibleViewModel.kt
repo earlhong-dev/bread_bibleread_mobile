@@ -2,6 +2,7 @@ package com.bibleread.bread.viewmodel
 
 import android.app.Application
 import android.content.Context
+import java.io.File
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
@@ -46,8 +47,38 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<BibleUiState> = _uiState
 
     // Remember last position so we can reload it after a translation switch and app restart
-    private var lastBook    = prefs.getString("last_book", "Genesis") ?: "Genesis"
-    private var lastChapter = prefs.getInt("last_chapter", 1)
+    var lastBook    = prefs.getString("last_book", "Genesis") ?: "Genesis"
+        private set
+    var lastChapter = prefs.getInt("last_chapter", 1)
+        private set
+
+    // Last scroll index within the chapter list (item index in LazyColumn)
+    var lastScrollIndex = prefs.getInt("last_scroll_index", 0)
+        private set
+
+    fun saveScrollIndex(index: Int) {
+        if (index == lastScrollIndex) return
+        lastScrollIndex = index
+        prefs.edit().putInt("last_scroll_index", index).apply()
+    }
+
+    var fontSize = prefs.getFloat("font_size", 18f)
+        private set
+
+    fun saveFontSize(size: Float) {
+        if (size == fontSize) return
+        fontSize = size
+        prefs.edit().putFloat("font_size", size).apply()
+    }
+
+    var fontStyle = prefs.getString("font_style", "Sans-Serif") ?: "Sans-Serif"
+        private set
+
+    fun saveFontStyle(style: String) {
+        if (style == fontStyle) return
+        fontStyle = style
+        prefs.edit().putString("font_style", style).apply()
+    }
 
     // Persisted selected highlight color
     val selectedHighlightColor = mutableStateOf<Color?>(
@@ -118,7 +149,66 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("last_custom_hex", hex).apply()
     }
 
+    val customFonts = mutableStateListOf<File>()
+
+    private fun loadCustomFonts() {
+        val fontsDir = File(getApplication<Application>().filesDir, "custom_fonts")
+        if (!fontsDir.exists()) fontsDir.mkdirs()
+        customFonts.clear()
+        fontsDir.listFiles()?.forEach { file ->
+            if (file.extension.equals("ttf", true) || file.extension.equals("otf", true)) {
+                customFonts.add(file)
+            }
+        }
+    }
+
+    fun importCustomFont(uri: android.net.Uri) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val context = getApplication<Application>()
+                val fontsDir = File(context.filesDir, "custom_fonts")
+                if (!fontsDir.exists()) fontsDir.mkdirs()
+                
+                var fileName = "custom_font_${System.currentTimeMillis()}.ttf"
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            fileName = cursor.getString(nameIndex)
+                        }
+                    }
+                }
+                
+                val targetFile = File(fontsDir, fileName)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    java.io.FileOutputStream(targetFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    loadCustomFonts()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun removeCustomFont(fontName: String) {
+        val fileToRemove = customFonts.find { it.nameWithoutExtension == fontName }
+        if (fileToRemove != null && fileToRemove.exists()) {
+            fileToRemove.delete()
+            customFonts.remove(fileToRemove)
+            // If the deleted font was currently selected, revert to default
+            if (fontStyle == fontName) {
+                saveFontStyle("Sans-Serif")
+            }
+        }
+    }
+
     init {
+        loadCustomFonts()
         // Pre-built DB is ready immediately — load the default chapter directly
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val t0 = android.os.SystemClock.elapsedRealtime()
@@ -142,10 +232,15 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         loadChapter(lastBook, lastChapter)
     }
 
-    fun loadChapter(book: String, chapter: Int) {
+    fun loadChapter(book: String, chapter: Int, resetScroll: Boolean = true) {
         lastBook    = book
         lastChapter = chapter
-        prefs.edit().putString("last_book", book).putInt("last_chapter", chapter).apply()
+        if (resetScroll) {
+            lastScrollIndex = 0
+            prefs.edit().putString("last_book", book).putInt("last_chapter", chapter).putInt("last_scroll_index", 0).apply()
+        } else {
+            prefs.edit().putString("last_book", book).putInt("last_chapter", chapter).apply()
+        }
         _uiState.value = BibleUiState.Loading
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {

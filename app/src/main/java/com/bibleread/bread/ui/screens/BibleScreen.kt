@@ -55,8 +55,12 @@ import com.bibleread.bread.data.TranslationManager
 import com.bibleread.bread.ui.theme.BackgroundDark
 import com.bibleread.bread.viewmodel.BibleUiState
 import com.bibleread.bread.viewmodel.BibleViewModel
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.text.font.Font
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 
 val BIBLE_BOOKS = mapOf(
     // Old Testament
@@ -81,17 +85,41 @@ val BIBLE_BOOKS = mapOf(
     "2 Juan" to 1, "3 Juan" to 1, "Judas" to 1, "Pahayag" to 22,
 )
 
+fun getFontFamily(styleName: String, customFontFiles: List<File> = emptyList()): FontFamily {
+    // Check custom fonts first
+    val matchingFile = customFontFiles.firstOrNull {
+        it.nameWithoutExtension.equals(styleName, ignoreCase = true)
+    }
+    if (matchingFile != null && matchingFile.exists()) {
+        return FontFamily(Font(matchingFile))
+    }
+    return when (styleName.lowercase()) {
+        "serif" -> FontFamily.Serif
+        "monospace" -> FontFamily.Monospace
+        "cursive" -> FontFamily.Cursive
+        else -> FontFamily.SansSerif
+    }
+}
+
 @Composable
 fun BibleScreen(vm: BibleViewModel = viewModel()) {
     val books = BIBLE_BOOKS.keys.toList()
 
-    var selectedBook by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Genesis") }
+    var selectedBook by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(vm.lastBook) }
     var showBookSelection by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    var targetChapter by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(1) }
+    var targetChapter by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(vm.lastChapter) }
 
-    var fontSize by androidx.compose.runtime.saveable.rememberSaveable { mutableFloatStateOf(17f) }
+    var fontSize by androidx.compose.runtime.saveable.rememberSaveable { mutableFloatStateOf(vm.fontSize) }
+    var fontStyle by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(vm.fontStyle) }
     var showSettings by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var showTranslationPicker by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+
+    // SAF launcher for importing custom fonts
+    val fontFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) vm.importCustomFont(uri)
+    }
 
     // Highlights panel — shown when any verse is selected
     val selectedVerses = androidx.compose.runtime.saveable.rememberSaveable(
@@ -145,7 +173,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
         contentVisible = false
         selectedBook = book
         targetChapter = chapter
-        vm.loadChapter(book, chapter)
+        vm.loadChapter(book, chapter, resetScroll = true)
     }
 
     LaunchedEffect(uiState) {
@@ -153,15 +181,33 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             val verses = (uiState as BibleUiState.Success).verses
             val versesByChapter = verses.groupBy { it.chapter }
 
-            // Scroll to the right chapter
-            var targetIndex = 0
-            for ((chapter, chapterVerses) in versesByChapter) {
-                if (chapter == targetChapter) break
-                targetIndex += 1
-                targetIndex += chapterVerses.size
-                targetIndex += 1
+            // First-ever load: restore the persisted scroll index directly.
+            // Subsequent chapter navigations: scroll to the chapter header.
+            if (!hasInitialized) {
+                val savedIndex = vm.lastScrollIndex
+                if (savedIndex > 0) {
+                    listState.scrollToItem(savedIndex)
+                } else {
+                    var targetIndex = 0
+                    for ((chapter, chapterVerses) in versesByChapter) {
+                        if (chapter == targetChapter) break
+                        targetIndex += 1
+                        targetIndex += chapterVerses.size
+                        targetIndex += 1
+                    }
+                    listState.scrollToItem(targetIndex)
+                }
+            } else {
+                // Navigated to a new chapter — scroll to its header
+                var targetIndex = 0
+                for ((chapter, chapterVerses) in versesByChapter) {
+                    if (chapter == targetChapter) break
+                    targetIndex += 1
+                    targetIndex += chapterVerses.size
+                    targetIndex += 1
+                }
+                listState.scrollToItem(targetIndex)
             }
-            listState.scrollToItem(targetIndex)
 
             // First-ever load: bring in header and bottom bar
             if (!hasInitialized) {
@@ -174,6 +220,13 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             // Every load: fade in content
             delay(80)
             contentVisible = true
+        }
+    }
+
+    // Persist scroll position continuously while the user scrolls
+    LaunchedEffect(listState.firstVisibleItemIndex) {
+        if (hasInitialized) {
+            vm.saveScrollIndex(listState.firstVisibleItemIndex)
         }
     }
 
@@ -298,7 +351,8 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     Text(
                                         text = chapter.toString(),
                                         color = Color.White.copy(alpha = 0.45f),
-                                        fontSize = 64.sp,
+                                        fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                        fontSize = (fontSize * 3.55f).sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         letterSpacing = 2.sp
                                     )
@@ -313,7 +367,8 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     Text(
                                         text = verse.heading,
                                         color = Color.White,
-                                        fontSize = 20.sp,
+                                        fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                        fontSize = (fontSize * 1.1f).sp,
                                         fontWeight = FontWeight.Bold,
                                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -325,7 +380,8 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                         Text(
                                             text = verse.subheading,
                                             color = Color.Gray,
-                                            fontSize = 13.sp,
+                                            fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                            fontSize = (fontSize * 0.7f).sp,
                                             fontWeight = FontWeight.Normal,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                             lineHeight = 18.sp,
@@ -365,7 +421,8 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                                 SpanStyle(
                                                     color = Color(0xFFAAAAAA),
                                                     fontWeight = FontWeight.Bold,
-                                                    fontSize = 12.sp,
+                                                    fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                                    fontSize = (fontSize * 0.65f).sp,
                                                     textDecoration = if (isSelected)
                                                         androidx.compose.ui.text.style.TextDecoration.Underline
                                                     else null
@@ -374,6 +431,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             withStyle(
                                                 SpanStyle(
                                                     color = Color.White,
+                                                    fontFamily = getFontFamily(fontStyle, vm.customFonts),
                                                     fontSize = fontSize.sp,
                                                     textDecoration = if (isSelected)
                                                         androidx.compose.ui.text.style.TextDecoration.Underline
@@ -478,14 +536,14 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(64.dp),
+                        .height(64.dp)
+                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(32.dp))
+                        .padding(horizontal = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                     // Prev
@@ -494,9 +552,9 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                             if (targetChapter > 1) requestChapter(selectedBook, targetChapter - 1)
                         },
                         enabled = !hasSelection,
-                        shape = RoundedCornerShape(topStart = 23.dp, bottomStart = 23.dp),
+                        shape = CircleShape,
                         color = Color(0xFF1A1A1A),
-                        modifier = Modifier.size(width = 46.dp, height = 46.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
@@ -514,7 +572,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         enabled = !hasSelection,
                         shape = androidx.compose.ui.graphics.RectangleShape,
                         color = Color(0xFF1A1A1A),
-                        modifier = Modifier.weight(1f).height(46.dp)
+                        modifier = Modifier.weight(1f).height(44.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
@@ -535,9 +593,9 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                             if (targetChapter < maxChapter) requestChapter(selectedBook, targetChapter + 1)
                         },
                         enabled = !hasSelection,
-                        shape = RoundedCornerShape(topEnd = 23.dp, bottomEnd = 23.dp),
+                        shape = CircleShape,
                         color = Color(0xFF1A1A1A),
-                        modifier = Modifier.size(width = 46.dp, height = 46.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
@@ -549,7 +607,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         }
                     }
                 } // end Row 1
-                } // end Row 1 centering Box
+                } // end Row 1 container Box
 
                 // ── Row 2: selection actions — slides up over Row 1 ───────────
                 AnimatedVisibility(
@@ -567,8 +625,10 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .height(64.dp)
                                 .background(Color(0xFF111111), shape = RoundedCornerShape(32.dp))
-                                .padding(10.dp)
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -845,7 +905,18 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
         ) {
             AppearanceSettingsOverlay(
                 currentFontSize = fontSize,
-                onFontSizeChange = { fontSize = it },
+                onFontSizeChange = { 
+                    fontSize = it
+                    vm.saveFontSize(it)
+                },
+                currentFontStyle = fontStyle,
+                onFontStyleChange = {
+                    fontStyle = it
+                    vm.saveFontStyle(it)
+                },
+                customFonts = vm.customFonts,
+                onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
+                onRemoveFont = { vm.removeCustomFont(it) },
                 onClose = { showSettings = false }
             )
         }
@@ -1225,28 +1296,46 @@ private fun BookRow(
 fun AppearanceSettingsOverlay(
     currentFontSize: Float,
     onFontSizeChange: (Float) -> Unit,
+    currentFontStyle: String,
+    onFontStyleChange: (String) -> Unit,
+    customFonts: List<File> = emptyList(),
+    onAddFont: () -> Unit = {},
+    onRemoveFont: (String) -> Unit = {},
     onClose: () -> Unit
 ) {
+    var isDeleteMode by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark)
     ) {
-        Row(
+        // ── Header ────────────────────────────────────────────────────────────
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(top = 20.dp, bottom = 12.dp),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "Appearance",
                 color = Color.White,
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
+                fontWeight = FontWeight.Bold
             )
-            IconButton(onClick = onClose) {
-                Icon(painterResource(R.drawable.ic_close), contentDescription = "Close", tint = Color.White)
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
+                    .size(32.dp)
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_close),
+                    contentDescription = "Close",
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
@@ -1256,51 +1345,255 @@ fun AppearanceSettingsOverlay(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Font Size",
+                text = "Preview",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Slider(
-                value = currentFontSize,
-                onValueChange = onFontSizeChange,
-                valueRange = 12f..32f,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = Color.White,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                )
-            )
-            Text(
-                text = "${currentFontSize.toInt()} sp",
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 14.sp,
-                modifier = Modifier.align(Alignment.End)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Font Style",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                color = Color.White.copy(alpha = 0.05f)
+                color = Color.White.copy(alpha = 0.05f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
             ) {
                 Text(
-                    text = "In the beginning God created the heaven and the earth.",
-                    color = Color.White,
-                    fontSize = currentFontSize.sp,
-                    modifier = Modifier.padding(16.dp),
-                    lineHeight = (currentFontSize * 1.5).sp
+                    text = buildAnnotatedString {
+                        withStyle(
+                            SpanStyle(
+                                color = Color(0xFFAAAAAA),
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = getFontFamily(currentFontStyle, customFonts),
+                                fontSize = (currentFontSize * 0.65f).sp
+                            )
+                        ) { append("1  ") }
+                        withStyle(
+                            SpanStyle(
+                                color = Color.White,
+                                fontFamily = getFontFamily(currentFontStyle, customFonts),
+                                fontSize = currentFontSize.sp
+                            )
+                        ) { append("Nang pasimula ay naroon na ang Salita, at ang Salita ay kasama ng Diyos, at ang Salita ay Diyos.") }
+                    },
+                    lineHeight = (currentFontSize * 1.9).sp,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp)
                 )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val fontSizeLabel = when (currentFontSize.toInt()) {
+                14 -> "Extra Small"
+                16 -> "Small"
+                18 -> "Normal"
+                20 -> "Medium"
+                22 -> "Large"
+                24 -> "Extra Large"
+                else -> "Custom"
+            }
+
+            @OptIn(ExperimentalMaterial3Api::class)
+            Box(
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // If thumb is 24.dp, its center rests exactly 12.dp from the edges
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                    val stepsCount = 6
+                    val trackWidth = size.width
+                    val stepWidth = trackWidth / (stepsCount - 1)
+                    val valuePerStep = (24f - 14f) / (stepsCount - 1)
+                    
+                    // Draw horizontal track
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.2f),
+                        start = Offset(0f, size.height / 2),
+                        end = Offset(trackWidth, size.height / 2),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                    
+                    val activeTrackWidth = ((currentFontSize - 14f) / (24f - 14f)) * trackWidth
+                    drawLine(
+                        color = Color.White,
+                        start = Offset(0f, size.height / 2),
+                        end = Offset(activeTrackWidth, size.height / 2),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                    
+                    // Draw vertical ticks
+                    for (i in 0 until stepsCount) {
+                        val x = i * stepWidth
+                        val tickValue = 14f + (i * valuePerStep)
+                        val isActive = tickValue <= currentFontSize
+                        
+                        drawLine(
+                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.4f),
+                            start = Offset(x, size.height / 2 - 7.dp.toPx()),
+                            end = Offset(x, size.height / 2 + 7.dp.toPx()),
+                            strokeWidth = 2.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    }
+                }
+                Slider(
+                    value = currentFontSize,
+                    onValueChange = onFontSizeChange,
+                    valueRange = 14f..24f,
+                    steps = 4,
+                    thumb = {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(Color.White, CircleShape)
+                        )
+                    },
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = Color.Transparent,
+                        inactiveTrackColor = Color.Transparent,
+                        activeTickColor = Color.Transparent,
+                        inactiveTickColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Text(
+                text = fontSizeLabel,
+                color = Color.White.copy(alpha = 0.45f),
+                fontSize = 12.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+
+
+            // Font Style header with "+ Add Fonts" button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Font Style",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Surface(
+                    onClick = onAddFont,
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.08f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        0.5.dp, Color.White.copy(alpha = 0.25f)
+                    ),
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_plus_lucide),
+                            contentDescription = "Add Font",
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            val builtInFontOptions = listOf("Sans-Serif", "Serif", "Monospace", "Cursive")
+            val customFontNames = customFonts.map { it.nameWithoutExtension }
+            val hasCustomFonts = customFontNames.isNotEmpty()
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Built-in fonts
+                items(builtInFontOptions) { fontName ->
+                    val isSelected = fontName == currentFontStyle
+                    Surface(
+                        onClick = { onFontStyleChange(fontName) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) Color.White else Color.White.copy(alpha = 0.2f)
+                        )
+                    ) {
+                        Text(
+                            text = fontName,
+                            fontFamily = getFontFamily(fontName),
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                        )
+                    }
+                }
+                // Divider between built-in and custom
+                if (hasCustomFonts) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(48.dp)
+                                .background(Color.White.copy(alpha = 0.15f))
+                        )
+                    }
+                    // Custom fonts
+                    items(customFontNames) { fontName ->
+                        val isSelected = fontName == currentFontStyle
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    if (isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isSelected && !isDeleteMode) Color.White else Color.White.copy(alpha = 0.2f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .pointerInput(fontName) {
+                                    detectTapGestures(
+                                        onLongPress = { isDeleteMode = true },
+                                        onTap = {
+                                            if (isDeleteMode) {
+                                                onRemoveFont(fontName)
+                                                isDeleteMode = false
+                                            } else {
+                                                onFontStyleChange(fontName)
+                                            }
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = fontName,
+                                fontFamily = getFontFamily(fontName, customFonts),
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                            )
+                            if (isDeleteMode) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painterResource(R.drawable.ic_trash_lucide),
+                                        contentDescription = "Delete Font",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
