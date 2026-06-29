@@ -23,6 +23,8 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -58,6 +60,8 @@ import com.bibleread.bread.viewmodel.BibleViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.text.font.Font
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -101,6 +105,78 @@ fun getFontFamily(styleName: String, customFontFiles: List<File> = emptyList()):
     }
 }
 
+fun getBookAbbreviation(bookName: String): String {
+    return when (bookName) {
+        "Genesis" -> "GEN"
+        "Exodo" -> "EXO"
+        "Levitico" -> "LEV"
+        "Mga Bilang" -> "BIL"
+        "Deuteronomio" -> "DEU"
+        "Josue" -> "JOS"
+        "Mga Hukom" -> "HUK"
+        "Ruth" -> "RUTH"
+        "1 Samuel" -> "1 SAM"
+        "2 Samuel" -> "2 SAM"
+        "1 Mga Hari" -> "1 HARI"
+        "2 Mga Hari" -> "2 HARI"
+        "1 Mga Cronica" -> "1 CRON"
+        "2 Mga Cronica" -> "2 CRON"
+        "Ezra" -> "EZRA"
+        "Nehemias" -> "NEH"
+        "Ester" -> "EST"
+        "Job" -> "JOB"
+        "Mga Awit" -> "AWIT"
+        "Mga Kawikaan" -> "KAWI"
+        "Ang Mangangaral" -> "MANG"
+        "Ang Awit ni Solomon" -> "SOLO"
+        "Isaias" -> "ISA"
+        "Jeremias" -> "JER"
+        "Mga Panaghoy" -> "PANAG"
+        "Ezekiel" -> "EZEK"
+        "Daniel" -> "DAN"
+        "Hosea" -> "HOS"
+        "Joel" -> "JOEL"
+        "Amos" -> "AMOS"
+        "Obadias" -> "OBA"
+        "Jonas" -> "JON"
+        "Mikas" -> "MIK"
+        "Nahum" -> "NAH"
+        "Habakuk" -> "HAB"
+        "Zefanias" -> "ZEF"
+        "Hagai" -> "HAG"
+        "Zacarias" -> "ZAC"
+        "Malakias" -> "MAL"
+        "Mateo" -> "MAT"
+        "Marcos" -> "MAR"
+        "Lucas" -> "LUC"
+        "Juan" -> "JUAN"
+        "Mga Gawa" -> "GAWA"
+        "Mga Taga-Roma" -> "ROMA"
+        "1 Mga Taga-Corinto" -> "1 COR"
+        "2 Mga Taga-Corinto" -> "2 COR"
+        "Mga Taga-Galacia" -> "GAL"
+        "Mga Taga-Efeso" -> "EFE"
+        "Mga Taga-Filipos" -> "FILI"
+        "Mga Taga-Colosas" -> "COL"
+        "1 Mga Taga-Tesalonica" -> "1 TESA"
+        "2 Mga Taga-Tesalonica" -> "2 TESA"
+        "1 Timoteo" -> "1 TIM"
+        "2 Timoteo" -> "2 TIM"
+        "Tito" -> "TITO"
+        "Filemon" -> "FILE"
+        "Mga Hebreo" -> "HEB"
+        "Santiago" -> "SAN"
+        "1 Pedro" -> "1 PED"
+        "2 Pedro" -> "2 PED"
+        "1 Juan" -> "1 JUAN"
+        "2 Juan" -> "2 JUAN"
+        "3 Juan" -> "3 JUAN"
+        "Judas" -> "JUD"
+        "Pahayag" -> "PAHA"
+        else -> bookName.take(4).uppercase()
+    }
+}
+
 @Composable
 fun BibleScreen(vm: BibleViewModel = viewModel()) {
     val books = BIBLE_BOOKS.keys.toList()
@@ -113,6 +189,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
     var fontStyle by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(vm.fontStyle) }
     var showSettings by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var showTranslationPicker by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var showSelectedVersesWindow by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
     // SAF launcher for importing custom fonts
     val fontFileLauncher = rememberLauncherForActivityResult(
@@ -331,6 +408,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         if (selectedVerses.isEmpty()) {
                             showColorPickerRow = false
                             isDeleteMode = false
+                            showSelectedVersesWindow = false
                         }
                     }
 
@@ -372,6 +450,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                         fontWeight = FontWeight.Bold,
                                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        lineHeight = (fontSize * 1.5f).sp,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(bottom = 4.dp)
@@ -384,7 +463,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             fontSize = (fontSize * 0.7f).sp,
                                             fontWeight = FontWeight.Normal,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                            lineHeight = 18.sp,
+                                            lineHeight = (fontSize * 1.1f).sp,
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -501,14 +580,15 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
         ) {
             val hasSelection = selectedVerses.isNotEmpty()
 
-            // Build verse range label: "Genesis 1:1" or "Genesis 1:1-4"
+            // Build verse range label: "GEN 1:1" or "GEN 1:1-4"
             val verseRangeLabel = run {
                 val verseNums = selectedVerses
                     .filter { it.startsWith("$selectedBook-$targetChapter-") }
                     .mapNotNull { it.substringAfterLast("-").toIntOrNull() }
                     .sorted()
+                val abbrev = getBookAbbreviation(selectedBook)
                 if (verseNums.isEmpty()) {
-                    "$selectedBook $targetChapter"
+                    "$abbrev $targetChapter"
                 } else {
                     val isAllConsecutive = verseNums.last() - verseNums.first() == verseNums.size - 1
                     val suffix = when {
@@ -517,7 +597,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         verseNums.size == 2 -> ":${verseNums[0]}, ${verseNums[1]}"
                         else -> ":${verseNums.first()}..${verseNums.last()}"
                     }
-                    "$selectedBook $targetChapter$suffix"
+                    "$abbrev $targetChapter$suffix"
                 }
             }
 
@@ -780,7 +860,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                 } else {
                                     // Verse range label
                                     Surface(
-                                        onClick = { },
+                                        onClick = { showSelectedVersesWindow = true },
                                         shape = RoundedCornerShape(22.dp),
                                         color = Color(0xFF1A1A1A),
                                         modifier = Modifier.weight(1f).height(44.dp)
@@ -999,6 +1079,83 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     }
                 },
                 onDismiss = { showCustomColorPicker = false }
+            )
+        }
+
+        // ── Selected verses overlay ───────────────────────────────────────────
+        AnimatedVisibility(
+            visible = showSelectedVersesWindow,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            val selectedVerseEntities = remember(selectedVerses.size, uiState) {
+                if (uiState is BibleUiState.Success) {
+                    val currentVerses = (uiState as BibleUiState.Success).verses
+                    currentVerses.filter { "${it.book}-${it.chapter}-${it.verse}" in selectedVerses }
+                        .sortedBy { it.verse }
+                } else {
+                    emptyList()
+                }
+            }
+
+            // Build full verse range label using full book name
+            val fullVerseRangeLabel = remember(selectedVerses.size) {
+                val verseNums = selectedVerses
+                    .filter { it.startsWith("$selectedBook-$targetChapter-") }
+                    .mapNotNull { it.substringAfterLast("-").toIntOrNull() }
+                    .sorted()
+                if (verseNums.isEmpty()) {
+                    "$selectedBook $targetChapter"
+                } else {
+                    val isAllConsecutive = verseNums.last() - verseNums.first() == verseNums.size - 1
+                    val suffix = when {
+                        verseNums.size == 1 -> ":${verseNums.first()}"
+                        isAllConsecutive -> ":${verseNums.first()}-${verseNums.last()}"
+                        verseNums.size == 2 -> ":${verseNums[0]}, ${verseNums[1]}"
+                        else -> ":${verseNums.first()}..${verseNums.last()}"
+                    }
+                    "$selectedBook $targetChapter$suffix"
+                }
+            }
+
+            val context = LocalContext.current
+            SelectedVersesOverlay(
+                headerText = fullVerseRangeLabel,
+                selectedVerses = selectedVerseEntities,
+                fontStyle = fontStyle,
+                fontSize = fontSize,
+                customFonts = vm.customFonts,
+                onClose = { showSelectedVersesWindow = false },
+                onShare = {
+                    val shareText = buildString {
+                        append(fullVerseRangeLabel)
+                        append("\n\n")
+                        selectedVerseEntities.forEach { v ->
+                            val lbl = v.display ?: v.verse.toString()
+                            append("$lbl  ${v.text.trim()}\n")
+                        }
+                    }
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, shareText.trim())
+                    }
+                    context.startActivity(Intent.createChooser(intent, null))
+                },
+                onCopy = {
+                    val copyText = buildString {
+                        append(fullVerseRangeLabel)
+                        append("\n\n")
+                        selectedVerseEntities.forEach { v ->
+                            val lbl = v.display ?: v.verse.toString()
+                            append("$lbl  ${v.text.trim()}\n")
+                        }
+                    }
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(
+                        android.content.ClipData.newPlainText("verse", copyText.trim())
+                    )
+                }
             )
         }
     }
@@ -1959,5 +2116,190 @@ fun CustomColorPickerPanel(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+// ── Selected Verses Overlay ───────────────────────────────────────────────────
+
+@Composable
+fun SelectedVersesOverlay(
+    headerText: String,
+    selectedVerses: List<com.bibleread.bread.data.VerseEntity>,
+    fontStyle: String,
+    fontSize: Float,
+    customFonts: List<java.io.File>,
+    onClose: () -> Unit,
+    onShare: () -> Unit,
+    onCopy: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null
+            ) { onClose() },
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.8f)
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) { /* consume touches */ },
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1E1E1E),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+
+                // ── Header ────────────────────────────────────────────────
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = headerText,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+
+                HorizontalDivider(
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                // ── Verse list — always centered vertically ────────────────
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        selectedVerses.forEach { verse ->
+                            val verseLabel = verse.display ?: verse.verse.toString()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 16.dp)
+                            ) {
+                                Text(
+                                    text = buildAnnotatedString {
+                                        withStyle(
+                                            SpanStyle(
+                                                color = Color(0xFFAAAAAA),
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = getFontFamily(fontStyle, customFonts),
+                                                fontSize = (fontSize * 0.65f).sp
+                                            )
+                                        ) { append("$verseLabel  ") }
+                                        withStyle(
+                                            SpanStyle(
+                                                color = Color.White,
+                                                fontFamily = getFontFamily(fontStyle, customFonts),
+                                                fontSize = fontSize.sp
+                                            )
+                                        ) { append(verse.text.trim()) }
+                                    },
+                                    lineHeight = (fontSize * 1.9).sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Bottom action buttons ──────────────────────────────────
+                HorizontalDivider(
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Share button
+                    Surface(
+                        onClick = onShare,
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            0.5.dp, Color.White.copy(alpha = 0.15f)
+                        ),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_share2_lucide),
+                                contentDescription = "Share",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Share",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    // Copy button
+                    Surface(
+                        onClick = onCopy,
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            0.5.dp, Color.White.copy(alpha = 0.15f)
+                        ),
+                        modifier = Modifier.weight(1f).height(44.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_copy_lucide),
+                                contentDescription = "Copy",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Copy",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
