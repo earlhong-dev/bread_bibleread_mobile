@@ -10,7 +10,8 @@ object BibleXmlParser {
     private const val TAG = "BibleXmlParser"
 
     suspend fun parse(context: Context, dao: VerseDao, fileName: String = "mbbtag05.xml") {
-        Log.d(TAG, "Starting parse of $fileName")
+        val sanitizedFileName = fileName.replace("[\\/\n\r]".toRegex(), "_")
+        Log.d(TAG, "Starting parse of $sanitizedFileName")
 
         val verses = mutableListOf<VerseEntity>()
 
@@ -83,16 +84,16 @@ object BibleXmlParser {
                     val finalHeading    = inlineHeading    ?: pendingHeading
                     val finalSubheading = inlineSubheading ?: pendingSubheading
 
-                    if (currentBook.isNotEmpty() && currentChapter > 0 && verseNum > 0) {
+                    if (currentBook.isNotEmpty() && currentChapter > 0 && verseNum > 0 && verseNum < 200) {
                         verses.add(
                             VerseEntity(
-                                book       = currentBook,
+                                book       = currentBook.take(100),
                                 chapter    = currentChapter,
                                 verse      = verseNum,
-                                text       = content.trim(),
-                                display    = display,
-                                heading    = finalHeading?.ifBlank { null },
-                                subheading = finalSubheading?.ifBlank { null }
+                                text       = content.trim().take(10000),
+                                display    = display?.take(100),
+                                heading    = finalHeading?.ifBlank { null }?.take(500),
+                                subheading = finalSubheading?.ifBlank { null }?.take(500)
                             )
                         )
                     }

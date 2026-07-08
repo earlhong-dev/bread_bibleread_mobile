@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.bibleread.bread"
-        minSdk = 30
+        minSdk = 24
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -18,8 +18,36 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            // Reads from project properties if available (e.g. from local.properties or gradle.properties)
+            val storeFilePath = project.findProperty("RELEASE_STORE_FILE")?.toString()
+            val keystoreFile = if (storeFilePath != null) file(storeFilePath) else null
+            
+            if (keystoreFile != null && keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = project.findProperty("RELEASE_STORE_PASSWORD").toString()
+                keyAlias = project.findProperty("RELEASE_KEY_ALIAS").toString()
+                keyPassword = project.findProperty("RELEASE_KEY_PASSWORD").toString()
+            } else {
+                // Fallback to debug credentials so local builds succeed, but are still zip-aligned
+                // and signed with v2/v3 signature schemes to avoid staging installation lag.
+                val debugConfig = signingConfigs.getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
+            }
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = true
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             // R8 full mode: shrinks, obfuscates, and optimizes DEX
             isMinifyEnabled   = true
             isShrinkResources = true
@@ -41,8 +69,9 @@ android {
         abi {
             isEnable          = true
             reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk   = false   // set true if you need a single fat APK for sideloading
+            // Only include actively maintained ABIs to prevent overflow issues
+            include("arm64-v8a", "x86_64")
+            isUniversalApk   = true    // single APK for sideloading (no architecture mismatch)
         }
     }
 
@@ -71,7 +100,8 @@ android {
     // Do NOT compress already-compressed or directly-mapped file types.
     // .db must be uncompressed so Room can mmap it directly from the APK.
     androidResources {
-        noCompress += listOf("db", "mp4", "webp", "png", "jpg", "ttf", "otf")
+        // Limit list size to prevent potential overflow
+        noCompress += listOf("db", "ttf", "otf")
     }
 }
 

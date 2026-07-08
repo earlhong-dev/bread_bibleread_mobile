@@ -105,77 +105,29 @@ fun getFontFamily(styleName: String, customFontFiles: List<File> = emptyList()):
     }
 }
 
-fun getBookAbbreviation(bookName: String): String {
-    return when (bookName) {
-        "Genesis" -> "GEN"
-        "Exodo" -> "EXO"
-        "Levitico" -> "LEV"
-        "Mga Bilang" -> "BIL"
-        "Deuteronomio" -> "DEU"
-        "Josue" -> "JOS"
-        "Mga Hukom" -> "HUK"
-        "Ruth" -> "RUTH"
-        "1 Samuel" -> "1 SAM"
-        "2 Samuel" -> "2 SAM"
-        "1 Mga Hari" -> "1 HARI"
-        "2 Mga Hari" -> "2 HARI"
-        "1 Mga Cronica" -> "1 CRON"
-        "2 Mga Cronica" -> "2 CRON"
-        "Ezra" -> "EZRA"
-        "Nehemias" -> "NEH"
-        "Ester" -> "EST"
-        "Job" -> "JOB"
-        "Mga Awit" -> "AWIT"
-        "Mga Kawikaan" -> "KAWI"
-        "Ang Mangangaral" -> "MANG"
-        "Ang Awit ni Solomon" -> "SOLO"
-        "Isaias" -> "ISA"
-        "Jeremias" -> "JER"
-        "Mga Panaghoy" -> "PANAG"
-        "Ezekiel" -> "EZEK"
-        "Daniel" -> "DAN"
-        "Hosea" -> "HOS"
-        "Joel" -> "JOEL"
-        "Amos" -> "AMOS"
-        "Obadias" -> "OBA"
-        "Jonas" -> "JON"
-        "Mikas" -> "MIK"
-        "Nahum" -> "NAH"
-        "Habakuk" -> "HAB"
-        "Zefanias" -> "ZEF"
-        "Hagai" -> "HAG"
-        "Zacarias" -> "ZAC"
-        "Malakias" -> "MAL"
-        "Mateo" -> "MAT"
-        "Marcos" -> "MAR"
-        "Lucas" -> "LUC"
-        "Juan" -> "JUAN"
-        "Mga Gawa" -> "GAWA"
-        "Mga Taga-Roma" -> "ROMA"
-        "1 Mga Taga-Corinto" -> "1 COR"
-        "2 Mga Taga-Corinto" -> "2 COR"
-        "Mga Taga-Galacia" -> "GAL"
-        "Mga Taga-Efeso" -> "EFE"
-        "Mga Taga-Filipos" -> "FILI"
-        "Mga Taga-Colosas" -> "COL"
-        "1 Mga Taga-Tesalonica" -> "1 TESA"
-        "2 Mga Taga-Tesalonica" -> "2 TESA"
-        "1 Timoteo" -> "1 TIM"
-        "2 Timoteo" -> "2 TIM"
-        "Tito" -> "TITO"
-        "Filemon" -> "FILE"
-        "Mga Hebreo" -> "HEB"
-        "Santiago" -> "SAN"
-        "1 Pedro" -> "1 PED"
-        "2 Pedro" -> "2 PED"
-        "1 Juan" -> "1 JUAN"
-        "2 Juan" -> "2 JUAN"
-        "3 Juan" -> "3 JUAN"
-        "Judas" -> "JUD"
-        "Pahayag" -> "PAHA"
-        else -> bookName.take(4).uppercase()
-    }
-}
+val BOOK_ABBREVIATIONS = mapOf(
+    "Genesis" to "GEN", "Exodo" to "EXO", "Levitico" to "LEV", "Mga Bilang" to "BIL",
+    "Deuteronomio" to "DEU", "Josue" to "JOS", "Mga Hukom" to "HUK", "Ruth" to "RUTH",
+    "1 Samuel" to "1 SAM", "2 Samuel" to "2 SAM", "1 Mga Hari" to "1 HARI", "2 Mga Hari" to "2 HARI",
+    "1 Mga Cronica" to "1 CRON", "2 Mga Cronica" to "2 CRON", "Ezra" to "EZRA", "Nehemias" to "NEH",
+    "Ester" to "EST", "Job" to "JOB", "Mga Awit" to "AWIT", "Mga Kawikaan" to "KAWI",
+    "Ang Mangangaral" to "MANG", "Ang Awit ni Solomon" to "SOLO", "Isaias" to "ISA", "Jeremias" to "JER",
+    "Mga Panaghoy" to "PANAG", "Ezekiel" to "EZEK", "Daniel" to "DAN", "Hosea" to "HOS",
+    "Joel" to "JOEL", "Amos" to "AMOS", "Obadias" to "OBA", "Jonas" to "JON", "Mikas" to "MIK",
+    "Nahum" to "NAH", "Habakuk" to "HAB", "Zefanias" to "ZEF", "Hagai" to "HAG",
+    "Zacarias" to "ZAC", "Malakias" to "MAL", "Mateo" to "MAT", "Marcos" to "MAR",
+    "Lucas" to "LUC", "Juan" to "JUAN", "Mga Gawa" to "GAWA", "Mga Taga-Roma" to "ROMA",
+    "1 Mga Taga-Corinto" to "1 COR", "2 Mga Taga-Corinto" to "2 COR", "Mga Taga-Galacia" to "GAL",
+    "Mga Taga-Efeso" to "EFE", "Mga Taga-Filipos" to "FILI", "Mga Taga-Colosas" to "COL",
+    "1 Mga Taga-Tesalonica" to "1 TESA", "2 Mga Taga-Tesalonica" to "2 TESA", "1 Timoteo" to "1 TIM",
+    "2 Timoteo" to "2 TIM", "Tito" to "TITO", "Filemon" to "FILE", "Mga Hebreo" to "HEB",
+    "Santiago" to "SAN", "1 Pedro" to "1 PED", "2 Pedro" to "2 PED", "1 Juan" to "1 JUAN",
+    "2 Juan" to "2 JUAN", "3 Juan" to "3 JUAN", "Judas" to "JUD", "Pahayag" to "PAHA"
+)
+
+fun getBookAbbreviation(bookName: String): String =
+    BOOK_ABBREVIATIONS[bookName] ?: bookName.take(4).uppercase()
+
 
 @Composable
 fun BibleScreen(vm: BibleViewModel = viewModel()) {
@@ -858,24 +810,37 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                         }
                                     }
                                 } else {
-                                    // Verse range label
+                                    // Share button
                                     Surface(
                                         onClick = { showSelectedVersesWindow = true },
-                                        shape = RoundedCornerShape(22.dp),
+                                        shape = CircleShape,
                                         color = Color(0xFF1A1A1A),
-                                        modifier = Modifier.weight(1f).height(44.dp)
+                                        modifier = Modifier.size(44.dp)
                                     ) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = verseRangeLabel,
-                                                color = Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                maxLines = 1,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                                modifier = Modifier.padding(horizontal = 10.dp)
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_share2_lucide),
+                                                contentDescription = "Share",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
+                                    }
+
+                                    // Verse range label (non-clickable) - takes remaining space
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(44.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = verseRangeLabel,
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1
+                                        )
                                     }
 
                                     // Bookmark button (in normal mode) - Ready for new bookmark logic!
@@ -2132,6 +2097,8 @@ fun SelectedVersesOverlay(
     onShare: () -> Unit,
     onCopy: () -> Unit
 ) {
+    var orientationMode by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("square") }
+    var showShareOptions by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2142,159 +2109,343 @@ fun SelectedVersesOverlay(
             ) { onClose() },
         contentAlignment = Alignment.Center
     ) {
-        Surface(
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .fillMaxHeight(0.8f)
-                .clickable(
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    indication = null
-                ) { /* consume touches */ },
-            shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF1E1E1E),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .padding(start = 20.dp, end = 20.dp, top = 60.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            // Main share window
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { /* consume touches */ },
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF1E1E1E),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
 
-                // ── Header ────────────────────────────────────────────────
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp, bottom = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = headerText,
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-
-                HorizontalDivider(
-                    color = Color.White.copy(alpha = 0.08f),
-                    thickness = 0.5.dp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-
-                // ── Verse list — always centered vertically ────────────────
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
+                    // ── Header ────────────────────────────────────────────────
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.Center
+                            .padding(top = 16.dp, bottom = 8.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        selectedVerses.forEach { verse ->
-                            val verseLabel = verse.display ?: verse.verse.toString()
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 16.dp)
-                            ) {
-                                Text(
-                                    text = buildAnnotatedString {
-                                        withStyle(
-                                            SpanStyle(
-                                                color = Color(0xFFAAAAAA),
-                                                fontWeight = FontWeight.Bold,
-                                                fontFamily = getFontFamily(fontStyle, customFonts),
-                                                fontSize = (fontSize * 0.65f).sp
-                                            )
-                                        ) { append("$verseLabel  ") }
-                                        withStyle(
-                                            SpanStyle(
-                                                color = Color.White,
-                                                fontFamily = getFontFamily(fontStyle, customFonts),
-                                                fontSize = fontSize.sp
-                                            )
-                                        ) { append(verse.text.trim()) }
-                                    },
-                                    lineHeight = (fontSize * 1.9).sp
+                        // Orientation toggle button — left (cycles: square → portrait → landscape)
+                        IconButton(
+                            onClick = {
+                                orientationMode = when (orientationMode) {
+                                    "square" -> "portrait"
+                                    "portrait" -> "landscape"
+                                    else -> "square"
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 12.dp)
+                                .size(32.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(
+                                    when (orientationMode) {
+                                        "portrait" -> R.drawable.ic_rectangle_vertical
+                                        "landscape" -> R.drawable.ic_rectangle_horizontal
+                                        else -> R.drawable.ic_square
+                                    }
+                                ),
+                                contentDescription = "Toggle Orientation",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        
+                        Text(
+                            text = headerText,
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 56.dp)
+                        )
+                    }
+
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.08f),
+                        thickness = 0.5.dp,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+
+                    // ── Verse list — centered with aspect ratio container ──────
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Aspect ratio container
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(
+                                    when (orientationMode) {
+                                        "portrait" -> 9f / 16f
+                                        "landscape" -> 16f / 9f
+                                        else -> 1f // square
+                                    }
                                 )
+                                .background(
+                                    Color.White.copy(alpha = 0.05f),
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .border(
+                                    1.dp,
+                                    Color.White.copy(alpha = 0.15f),
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .verticalScroll(rememberScrollState())
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                selectedVerses.forEach { verse ->
+                                    val verseLabel = verse.display ?: verse.verse.toString()
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 16.dp)
+                                    ) {
+                                        Text(
+                                            text = buildAnnotatedString {
+                                                withStyle(
+                                                    SpanStyle(
+                                                        color = Color(0xFFAAAAAA),
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontFamily = getFontFamily(fontStyle, customFonts),
+                                                        fontSize = (fontSize * 0.65f).sp
+                                                    )
+                                                ) { append("$verseLabel  ") }
+                                                withStyle(
+                                                    SpanStyle(
+                                                        color = Color.White,
+                                                        fontFamily = getFontFamily(fontStyle, customFonts),
+                                                        fontSize = fontSize.sp
+                                                    )
+                                                ) { append(verse.text.trim()) }
+                                            },
+                                            lineHeight = (fontSize * 1.9).sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
 
-                // ── Bottom action buttons ──────────────────────────────────
-                HorizontalDivider(
-                    color = Color.White.copy(alpha = 0.08f),
-                    thickness = 0.5.dp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Share button
-                    Surface(
-                        onClick = onShare,
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.White.copy(alpha = 0.08f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            0.5.dp, Color.White.copy(alpha = 0.15f)
-                        ),
-                        modifier = Modifier.weight(1f).height(44.dp)
+                    // ── Bottom action buttons ──────────────────────────────────
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_share2_lucide),
-                                contentDescription = "Share",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Share",
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                    // Copy button
-                    Surface(
-                        onClick = onCopy,
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.White.copy(alpha = 0.08f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            0.5.dp, Color.White.copy(alpha = 0.15f)
-                        ),
-                        modifier = Modifier.weight(1f).height(44.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                        // Copy button
+                        IconButton(
+                            onClick = onCopy,
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_copy_lucide),
                                 contentDescription = "Copy",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        // Change Background button
+                        IconButton(
+                            onClick = { /* TODO: Add change background logic */ },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_image_lucide),
+                                contentDescription = "Change Image",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        // Share button
+                        IconButton(
+                            onClick = { showShareOptions = !showShareOptions },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_share2_lucide),
+                                contentDescription = "Share",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Share options popup ────────────────────────────────────────
+            AnimatedVisibility(
+                visible = showShareOptions,
+                enter = fadeIn(tween(300)),
+                exit = fadeOut(tween(200))
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 0.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF1E1E1E),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Share option
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                onShare()
+                                showShareOptions = false
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_share2_lucide),
+                                    contentDescription = "Share",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Copy",
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                                text = "Share",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        // Chat option
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                // TODO: Add chat logic
+                                showShareOptions = false
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_chattab),
+                                    contentDescription = "Chat",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Chat",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        // Copy link option
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                onCopy()
+                                showShareOptions = false
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_copy_lucide),
+                                    contentDescription = "Copy Link",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Copy Link",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        // Download option
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                // TODO: Add download logic
+                                showShareOptions = false
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_download),
+                                    contentDescription = "Download",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Download",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp
                             )
                         }
                     }

@@ -16,15 +16,18 @@ object DbExporter {
      * Right-click → Save As → drop it into app/src/main/assets/translations/
      */
     fun exportFromXml(context: Context, xmlFileName: String) {
-        val dbName = TranslationManager.dbName(xmlFileName.removeSuffix(".xml"))
+        val sanitizedXml = xmlFileName.replace("[\\/\n\r]".toRegex(), "_")
+        val dbName = TranslationManager.dbName(sanitizedXml.removeSuffix(".xml"))
         val dbFile = context.getDatabasePath(dbName)
 
         if (dbFile.exists()) {
-            Log.d(TAG, "✅ DB ready at: ${dbFile.absolutePath}")
+            val sanitizedPath = dbFile.absolutePath.replace("[\n\r]".toRegex(), " ")
+            Log.d(TAG, "✅ DB ready at: $sanitizedPath")
             Log.d(TAG, "   Device File Explorer → data/data/com.bibleread.bread/databases/$dbName")
             Log.d(TAG, "   Right-click → Save As → put it in assets/translations/")
         } else {
-            Log.e(TAG, "DB file not found: ${dbFile.absolutePath}")
+            val sanitizedPath = dbFile.absolutePath.replace("[\n\r]".toRegex(), " ")
+            Log.e(TAG, "DB file not found: $sanitizedPath")
         }
     }
 }

@@ -253,6 +253,8 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun buildRepository(translationCode: String): BibleRepository {
+        // Note: Room database is unencrypted since it only contains public Bible text
+        // No sensitive user data is stored in this database
         val db = BibleDatabase.getInstance(getApplication(), translationCode)
         return BibleRepository(db.verseDao(), db.bookmarkDao())
     }
