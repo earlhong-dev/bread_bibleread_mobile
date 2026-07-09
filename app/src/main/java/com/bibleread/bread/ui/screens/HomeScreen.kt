@@ -23,7 +23,7 @@ fun HomeScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Space choices at the top
         Row(
@@ -40,13 +40,14 @@ fun HomeScreen() {
                         .clickable { selectedSpace = space }
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
+                    val isSelected = selectedSpace == space
                     Text(
                         text = space,
-                        color = if (selectedSpace == space) Color.White else Color.Gray,
-                        fontWeight = if (selectedSpace == space) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 14.sp
                     )
-                    if (selectedSpace == space) {
+                    if (isSelected) {
                         Box(
                             modifier = Modifier
                                 .padding(top = 4.dp)

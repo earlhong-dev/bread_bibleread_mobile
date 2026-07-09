@@ -68,7 +68,7 @@ fun ProfileScreen(isLoggedIn: Boolean = false) {
 @Composable
 private fun ProfileSignInPrompt() {
     Box(
-        modifier = Modifier.fillMaxSize().background(BackgroundDark),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -79,38 +79,41 @@ private fun ProfileSignInPrompt() {
                 modifier = Modifier
                     .size(width = 56.dp, height = 34.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = "Sign in to unlock\ncommunity features",
-                color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center, lineHeight = 28.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Join discussions, save highlights, and connect with other readers.",
-                color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), fontSize = 14.sp,
                 textAlign = TextAlign.Center, lineHeight = 20.sp
             )
             Spacer(modifier = Modifier.height(36.dp))
             Button(
                 onClick = { },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.onBackground,
+                    contentColor = MaterialTheme.colorScheme.background
+                ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Sign In", color = Color.Black, fontWeight = FontWeight.Bold,
+                Text("Sign In", fontWeight = FontWeight.Bold,
                     fontSize = 15.sp, modifier = Modifier.padding(vertical = 4.dp))
             }
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(
                 onClick = { },
                 modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Create Account", color = Color.White, fontWeight = FontWeight.Medium,
+                Text("Create Account", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium,
                     fontSize = 15.sp, modifier = Modifier.padding(vertical = 4.dp))
             }
         }
@@ -199,11 +202,11 @@ private fun ProfileContent() {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(BackgroundDark).verticalScroll(scrollState),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "PROFILE", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+            text = "PROFILE", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 32.dp)
         )
 
@@ -211,7 +214,7 @@ private fun ProfileContent() {
             modifier = Modifier.padding(horizontal = 16.dp).size(150.dp),
             contentAlignment = Alignment.BottomEnd
         ) {
-            Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(Color.DarkGray)) {
+            Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))) {
                 if (profileImageUri != null) {
                     Image(
                         painter = rememberAsyncImagePainter(profileImageUri),
@@ -225,7 +228,7 @@ private fun ProfileContent() {
             val interactionSource = remember { MutableInteractionSource() }
             val isPressed by interactionSource.collectIsPressedAsState()
             val btnColor by animateColorAsState(
-                targetValue = if (isPressed) Color(0xFFD0D0D0) else Color.White,
+                targetValue = if (isPressed) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onBackground,
                 label = "btnColor"
             )
             Box(
@@ -241,12 +244,12 @@ private fun ProfileContent() {
             ) {
                 Icon(painter = painterResource(R.drawable.ic_camera),
                     contentDescription = "Upload photo",
-                    tint = Color.Black, modifier = Modifier.size(20.dp))
+                    tint = MaterialTheme.colorScheme.background, modifier = Modifier.size(20.dp))
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("toaderrr", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+        Text("toaderrr", color = MaterialTheme.colorScheme.onBackground, fontSize = 24.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp))
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -274,10 +277,10 @@ private fun ProfileContent() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Downloads", color = Color.White, fontSize = 16.sp)
+                Text("Downloads", color = MaterialTheme.colorScheme.onBackground, fontSize = 16.sp)
                 Icon(
                     painter = painterResource(if (downloadsExpanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
-                    contentDescription = null, tint = Color.Gray
+                    contentDescription = null, tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                 )
             }
 
@@ -289,22 +292,22 @@ private fun ProfileContent() {
                     else           -> "Not Downloaded"
                 }
                 val statusColor = when {
-                    verseCount < 0 -> Color.Gray
+                    verseCount < 0 -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                     isDownloaded   -> Color(0xFF4CAF50)
                     else           -> Color(0xFFFF5252)
                 }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.05f))
+                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f))
                         .padding(horizontal = 24.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text("MBBTAG05", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                        Text("Magandang Balita Biblia (2005)", color = Color.Gray, fontSize = 12.sp)
-                        if (isDownloaded) Text("$verseCount verses", color = Color.Gray, fontSize = 11.sp)
+                        Text("MBBTAG05", color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("Magandang Balita Biblia (2005)", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), fontSize = 12.sp)
+                        if (isDownloaded) Text("$verseCount verses", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), fontSize = 11.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(
@@ -316,7 +319,7 @@ private fun ProfileContent() {
                 }
             }
 
-            HorizontalDivider(color = Color.DarkGray, thickness = 0.5.dp,
+            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f), thickness = 0.5.dp,
                 modifier = Modifier.padding(horizontal = 16.dp))
         }
 
@@ -352,7 +355,7 @@ fun SelectionOptionItem(
                 tint = iconColor, modifier = Modifier.size(32.dp))
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Text(label, color = Color.White, fontSize = 11.sp,
+        Text(label, color = MaterialTheme.colorScheme.onBackground, fontSize = 11.sp,
             textAlign = TextAlign.Center, lineHeight = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
@@ -369,14 +372,14 @@ fun SettingItem(label: String, isLast: Boolean = false, onClick: () -> Unit = {}
         ) {
             Text(
                 text = label,
-                color = if (label == "Log Out") Color.Red else Color.White,
+                color = if (label == "Log Out") Color.Red else MaterialTheme.colorScheme.onBackground,
                 fontSize = 16.sp
             )
             Icon(painterResource(R.drawable.ic_arrow_right),
-                contentDescription = null, tint = Color.Gray)
+                contentDescription = null, tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
         }
         if (!isLast) {
-            HorizontalDivider(color = Color.DarkGray, thickness = 0.5.dp,
+            HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f), thickness = 0.5.dp,
                 modifier = Modifier.padding(horizontal = 16.dp))
         }
     }

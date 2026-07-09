@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +37,7 @@ fun SplashScreen(onFinished: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -53,7 +54,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "bread",
-                color = androidx.compose.ui.graphics.Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp

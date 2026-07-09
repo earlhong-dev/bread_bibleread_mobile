@@ -278,7 +278,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(BackgroundDark)
+                .background(MaterialTheme.colorScheme.background)
         ) {
 
             // ── Header ───────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             ) {
                 Text(
                     text = selectedBook,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp,
                     maxLines = 1,
@@ -305,14 +305,14 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                 Surface(
                     onClick = { showTranslationPicker = true },
                     shape = RoundedCornerShape(6.dp),
-                    color = Color.White.copy(alpha = 0.1f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .padding(start = 14.dp)
                 ) {
                     Text(
                         text = TranslationManager.displayName(activeTranslation),
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp,
@@ -332,7 +332,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     Icon(
                         painter = painterResource(R.drawable.ic_settings2),
                         contentDescription = "Settings",
-                        tint = Color.White.copy(alpha = 0.6f),
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -380,7 +380,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                 ) {
                                     Text(
                                         text = chapter.toString(),
-                                        color = Color.White.copy(alpha = 0.45f),
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
                                         fontFamily = getFontFamily(fontStyle, vm.customFonts),
                                         fontSize = (fontSize * 3.55f).sp,
                                         fontWeight = FontWeight.ExtraBold,
@@ -396,7 +396,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     Spacer(modifier = Modifier.height(20.dp))
                                     Text(
                                         text = verse.heading,
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onBackground,
                                         fontFamily = getFontFamily(fontStyle, vm.customFonts),
                                         fontSize = (fontSize * 1.1f).sp,
                                         fontWeight = FontWeight.Bold,
@@ -410,7 +410,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     if (!verse.subheading.isNullOrBlank()) {
                                         Text(
                                             text = verse.subheading,
-                                            color = Color.Gray,
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                                             fontFamily = getFontFamily(fontStyle, vm.customFonts),
                                             fontSize = (fontSize * 0.7f).sp,
                                             fontWeight = FontWeight.Normal,
@@ -446,11 +446,12 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             end = 2.dp
                                         )
                                 ) {
+                                    val normalTextColor = MaterialTheme.colorScheme.onBackground
                                     Text(
                                         text = buildAnnotatedString {
                                             withStyle(
                                                 SpanStyle(
-                                                    color = Color(0xFFAAAAAA),
+                                                    color = normalTextColor.copy(alpha = 0.5f),
                                                     fontWeight = FontWeight.Bold,
                                                     fontFamily = getFontFamily(fontStyle, vm.customFonts),
                                                     fontSize = (fontSize * 0.65f).sp,
@@ -461,7 +462,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             ) { append("$verseLabel  ") }
                                             withStyle(
                                                 SpanStyle(
-                                                    color = Color.White,
+                                                    color = normalTextColor,
                                                     fontFamily = getFontFamily(fontStyle, vm.customFonts),
                                                     fontSize = fontSize.sp,
                                                     textDecoration = if (isSelected)
@@ -505,23 +506,6 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             }
         }
 
-        // ── Bottom fade gradient ──────────────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(160.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.0f to Color.Transparent,
-                            0.4f to BackgroundDark.copy(alpha = 0.6f),
-                            0.7f to BackgroundDark.copy(alpha = 0.92f),
-                            1.0f to BackgroundDark
-                        )
-                    )
-                )
-        )
 
         // ── Bottom bar ────────────────────────────────────────────────────────
         // Row 1 (prev/book/next) + Row 2 (selection actions) stacked in a Column
@@ -569,7 +553,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
-                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(32.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(32.dp))
                         .padding(horizontal = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -585,14 +569,14 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         },
                         enabled = !hasSelection,
                         shape = CircleShape,
-                        color = Color(0xFF1A1A1A),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_chevron_left),
                                 contentDescription = "Previous",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = if (hasSelection) 0.3f else 1f),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -603,13 +587,13 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         onClick = { showBookSelection = true },
                         enabled = !hasSelection,
                         shape = androidx.compose.ui.graphics.RectangleShape,
-                        color = Color(0xFF1A1A1A),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.weight(1f).height(44.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 text = "$selectedBook $targetChapter",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = if (hasSelection) 0.3f else 1f),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
@@ -626,14 +610,14 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         },
                         enabled = !hasSelection,
                         shape = CircleShape,
-                        color = Color(0xFF1A1A1A),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_chevron_right),
                                 contentDescription = "Next",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = if (hasSelection) 0.3f else 1f),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -658,7 +642,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
-                                .background(Color(0xFF111111), shape = RoundedCornerShape(32.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(32.dp))
                                 .padding(horizontal = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -711,7 +695,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                                     .size(36.dp)
                                                     .background(color, CircleShape)
                                                     .then(
-                                                        if (isChosen) Modifier.border(2.dp, Color.White, CircleShape)
+                                                        if (isChosen) Modifier.border(2.dp, MaterialTheme.colorScheme.onBackground, CircleShape)
                                                         else Modifier
                                                     )
                                                     .clickable(
@@ -728,7 +712,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                                     modifier = Modifier
                                                         .width(2.dp)
                                                         .height(24.dp)
-                                                        .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(1.dp))
+                                                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(1.dp))
                                                 )
                                             }
                                         }
@@ -741,7 +725,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                                     .size(36.dp)
                                                     .background(color, CircleShape)
                                                     .then(
-                                                        if (isChosen && !isDeleteMode) Modifier.border(2.dp, Color.White, CircleShape)
+                                                        if (isChosen && !isDeleteMode) Modifier.border(2.dp, MaterialTheme.colorScheme.onBackground, CircleShape)
                                                         else Modifier
                                                     )
                                                     .pointerInput(color) {
@@ -796,15 +780,16 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                         },
                                         enabled = isEraserMode || selectedHighlightColor != null,
                                         shape = CircleShape,
-                                        color = Color(0xFF1A1A1A),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
                                         modifier = Modifier.size(44.dp)
                                     ) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                             val iconRes = if (isEraserMode) R.drawable.ic_eraser else R.drawable.ic_pencil_line
+                                            val isAct = isEraserMode || selectedHighlightColor != null
                                             Icon(
                                                 painter = painterResource(iconRes),
                                                 contentDescription = if (isEraserMode) "Remove Highlight" else "Apply Highlight",
-                                                tint = if (isEraserMode || selectedHighlightColor != null) Color.White else Color.White.copy(alpha = 0.3f),
+                                                tint = if (isAct) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -814,14 +799,14 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     Surface(
                                         onClick = { showSelectedVersesWindow = true },
                                         shape = CircleShape,
-                                        color = Color(0xFF1A1A1A),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
                                         modifier = Modifier.size(44.dp)
                                     ) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                             Icon(
                                                 painter = painterResource(R.drawable.ic_share2_lucide),
                                                 contentDescription = "Share",
-                                                tint = Color.White,
+                                                tint = MaterialTheme.colorScheme.onBackground,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -836,7 +821,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     ) {
                                         Text(
                                             text = verseRangeLabel,
-                                            color = Color.White,
+                                            color = MaterialTheme.colorScheme.onBackground,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Medium,
                                             maxLines = 1
@@ -849,14 +834,14 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             // TODO: Add bookmark logic here
                                         },
                                         shape = CircleShape,
-                                        color = Color(0xFF1A1A1A),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
                                         modifier = Modifier.size(44.dp)
                                     ) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                             Icon(
                                                 painter = painterResource(R.drawable.ic_highlight),
                                                 contentDescription = "Bookmark",
-                                                tint = Color.White,
+                                                tint = MaterialTheme.colorScheme.onBackground,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -868,7 +853,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     Surface(
                                         onClick = { showColorPickerRow = true },
                                         shape = CircleShape,
-                                        color = Color(0xFF1A1A1A),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
                                         modifier = Modifier.size(44.dp)
                                     ) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -893,7 +878,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                                     modifier = Modifier
                                                         .size(22.dp)
                                                         .background(selectedHighlightColor!!, CircleShape)
-                                                        .border(1.5.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                                                        .border(1.5.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), CircleShape)
                                                 )
                                             }
                                         }
@@ -901,6 +886,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                 }
 
                                 // X — white icon (close / paintbrush)
+                                val showAct = if (showColorPickerRow) selectedHighlightColor != null else true
                                 Surface(
                                     onClick = {
                                         if (!showColorPickerRow) {
@@ -909,9 +895,9 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             isDeleteMode = false
                                         }
                                     },
-                                    enabled = if (showColorPickerRow) selectedHighlightColor != null else true,
+                                    enabled = showAct,
                                     shape = CircleShape,
-                                    color = if (showColorPickerRow) Color(0xFF1A1A1A) else Color.White,
+                                    color = if (showColorPickerRow) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.onBackground,
                                     modifier = Modifier.size(44.dp)
                                 ) {
                                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -919,8 +905,8 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             painter = painterResource(if (showColorPickerRow) R.drawable.ic_paintbrush else R.drawable.ic_close),
                                             contentDescription = "Clear selection",
                                             tint = if (showColorPickerRow) {
-                                                if (selectedHighlightColor != null) Color.White else Color.White.copy(alpha = 0.3f)
-                                            } else Color.Black,
+                                                if (selectedHighlightColor != null) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                                            } else MaterialTheme.colorScheme.background,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -948,6 +934,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut()
         ) {
+            var selectedThemeIndex by remember { mutableStateOf(vm.selectedThemeIndex) }
             AppearanceSettingsOverlay(
                 currentFontSize = fontSize,
                 onFontSizeChange = { 
@@ -960,6 +947,11 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     vm.saveFontStyle(it)
                 },
                 customFonts = vm.customFonts,
+                selectedThemeIndex = selectedThemeIndex,
+                onThemeChange = { index ->
+                    selectedThemeIndex = index
+                    vm.saveThemeIndex(index)
+                },
                 onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
                 onRemoveFont = { vm.removeCustomFont(it) },
                 onClose = { showSettings = false }
@@ -1186,7 +1178,7 @@ fun BookSelectionOverlay(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // ── Header ────────────────────────────────────────────────────────────
         Box(
@@ -1197,7 +1189,7 @@ fun BookSelectionOverlay(
         ) {
             Text(
                 text = "Scripture",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -1211,7 +1203,7 @@ fun BookSelectionOverlay(
                 Icon(
                     painterResource(R.drawable.ic_close),
                     contentDescription = "Close",
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1220,7 +1212,7 @@ fun BookSelectionOverlay(
         // ── Search ────────────────────────────────────────────────────────────
         Surface(
             shape = RoundedCornerShape(10.dp),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
@@ -1236,7 +1228,7 @@ fun BookSelectionOverlay(
                 Icon(
                     painter = painterResource(R.drawable.ic_search),
                     contentDescription = null,
-                    tint = Color.Black.copy(alpha = 0.4f),
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -1247,7 +1239,7 @@ fun BookSelectionOverlay(
                     if (searchQuery.isEmpty()) {
                         Text(
                             "Search book...",
-                            color = Color.Black.copy(alpha = 0.35f),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
                             fontSize = 15.sp,
                             lineHeight = 15.sp
                         )
@@ -1260,7 +1252,7 @@ fun BookSelectionOverlay(
                         },
                         singleLine = true,
                         textStyle = TextStyle(
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontSize = 15.sp,
                             lineHeight = 15.sp
                         ),
@@ -1277,7 +1269,7 @@ fun BookSelectionOverlay(
                         painterResource(R.drawable.ic_close),
                         contentDescription = "Clear",
                         tint = if (searchQuery.isNotEmpty())
-                            Color.Black.copy(alpha = 0.5f)
+                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         else
                             Color.Transparent,
                         modifier = Modifier.size(14.dp)
@@ -1332,7 +1324,7 @@ fun BookSelectionOverlay(
 private fun TestamentLabel(label: String) {
     Text(
         text = label,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onBackground,
         fontSize = 16.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 0.5.sp,
@@ -1363,7 +1355,7 @@ private fun BookRow(
         ) {
             Text(
                 text = book,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Normal,
                 modifier = Modifier.weight(1f)
@@ -1387,13 +1379,13 @@ private fun BookRow(
                     Surface(
                         onClick = { onChapterSelected(chapter) },
                         shape = RoundedCornerShape(8.dp),
-                        color = Color.White.copy(alpha = 0.08f),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
                         modifier = Modifier.size(44.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = chapter.toString(),
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -1405,7 +1397,7 @@ private fun BookRow(
         }
 
         HorizontalDivider(
-            color = Color.White.copy(alpha = 0.06f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f),
             thickness = 0.5.dp,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
@@ -1421,6 +1413,8 @@ fun AppearanceSettingsOverlay(
     currentFontStyle: String,
     onFontStyleChange: (String) -> Unit,
     customFonts: List<File> = emptyList(),
+    selectedThemeIndex: Int,
+    onThemeChange: (Int) -> Unit,
     onAddFont: () -> Unit = {},
     onRemoveFont: (String) -> Unit = {},
     onClose: () -> Unit
@@ -1430,7 +1424,7 @@ fun AppearanceSettingsOverlay(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // ── Header ────────────────────────────────────────────────────────────
         Box(
@@ -1441,7 +1435,7 @@ fun AppearanceSettingsOverlay(
         ) {
             Text(
                 text = "Appearance",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -1455,7 +1449,7 @@ fun AppearanceSettingsOverlay(
                 Icon(
                     painterResource(R.drawable.ic_close),
                     contentDescription = "Close",
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1468,23 +1462,24 @@ fun AppearanceSettingsOverlay(
         ) {
             Text(
                 text = "Preview",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            val contentTextColor = MaterialTheme.colorScheme.onBackground
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                color = Color.White.copy(alpha = 0.05f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                color = contentTextColor.copy(alpha = 0.05f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, contentTextColor.copy(alpha = 0.15f))
             ) {
                 Text(
                     text = buildAnnotatedString {
                         withStyle(
                             SpanStyle(
-                                color = Color(0xFFAAAAAA),
+                                color = contentTextColor.copy(alpha = 0.5f),
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = getFontFamily(currentFontStyle, customFonts),
                                 fontSize = (currentFontSize * 0.65f).sp
@@ -1492,7 +1487,7 @@ fun AppearanceSettingsOverlay(
                         ) { append("1  ") }
                         withStyle(
                             SpanStyle(
-                                color = Color.White,
+                                color = contentTextColor,
                                 fontFamily = getFontFamily(currentFontStyle, customFonts),
                                 fontSize = currentFontSize.sp
                             )
@@ -1521,6 +1516,7 @@ fun AppearanceSettingsOverlay(
                 contentAlignment = Alignment.Center
             ) {
                 // If thumb is 24.dp, its center rests exactly 12.dp from the edges
+                val lineTrackColor = MaterialTheme.colorScheme.onBackground
                 androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                     val stepsCount = 6
                     val trackWidth = size.width
@@ -1529,7 +1525,7 @@ fun AppearanceSettingsOverlay(
                     
                     // Draw horizontal track
                     drawLine(
-                        color = Color.White.copy(alpha = 0.2f),
+                        color = lineTrackColor.copy(alpha = 0.2f),
                         start = Offset(0f, size.height / 2),
                         end = Offset(trackWidth, size.height / 2),
                         strokeWidth = 2.dp.toPx(),
@@ -1538,7 +1534,7 @@ fun AppearanceSettingsOverlay(
                     
                     val activeTrackWidth = ((currentFontSize - 14f) / (24f - 14f)) * trackWidth
                     drawLine(
-                        color = Color.White,
+                        color = lineTrackColor,
                         start = Offset(0f, size.height / 2),
                         end = Offset(activeTrackWidth, size.height / 2),
                         strokeWidth = 2.dp.toPx(),
@@ -1552,7 +1548,7 @@ fun AppearanceSettingsOverlay(
                         val isActive = tickValue <= currentFontSize
                         
                         drawLine(
-                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.4f),
+                            color = if (isActive) lineTrackColor else lineTrackColor.copy(alpha = 0.4f),
                             start = Offset(x, size.height / 2 - 7.dp.toPx()),
                             end = Offset(x, size.height / 2 + 7.dp.toPx()),
                             strokeWidth = 2.dp.toPx(),
@@ -1569,7 +1565,7 @@ fun AppearanceSettingsOverlay(
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
-                                .background(Color.White, CircleShape)
+                                .background(MaterialTheme.colorScheme.onBackground, CircleShape)
                         )
                     },
                     colors = SliderDefaults.colors(
@@ -1583,7 +1579,7 @@ fun AppearanceSettingsOverlay(
             }
             Text(
                 text = fontSizeLabel,
-                color = Color.White.copy(alpha = 0.45f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
                 fontSize = 12.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
@@ -1598,16 +1594,16 @@ fun AppearanceSettingsOverlay(
             ) {
                 Text(
                     text = "Font Style",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Surface(
                     onClick = onAddFont,
                     shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.08f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
                     border = androidx.compose.foundation.BorderStroke(
-                        0.5.dp, Color.White.copy(alpha = 0.25f)
+                        0.5.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
                     ),
                     modifier = Modifier.size(28.dp)
                 ) {
@@ -1615,7 +1611,7 @@ fun AppearanceSettingsOverlay(
                         Icon(
                             painter = painterResource(R.drawable.ic_plus_lucide),
                             contentDescription = "Add Font",
-                            tint = Color.White.copy(alpha = 0.8f),
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -1637,16 +1633,16 @@ fun AppearanceSettingsOverlay(
                     Surface(
                         onClick = { onFontStyleChange(fontName) },
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                        color = if (isSelected) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f) else Color.Transparent,
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (isSelected) Color.White else Color.White.copy(alpha = 0.2f)
+                            if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
                         )
                     ) {
                         Text(
                             text = fontName,
                             fontFamily = getFontFamily(fontName),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontSize = 16.sp,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                         )
@@ -1659,7 +1655,7 @@ fun AppearanceSettingsOverlay(
                             modifier = Modifier
                                 .width(1.dp)
                                 .height(48.dp)
-                                .background(Color.White.copy(alpha = 0.15f))
+                                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
                         )
                     }
                     // Custom fonts
@@ -1668,12 +1664,12 @@ fun AppearanceSettingsOverlay(
                         Box(
                             modifier = Modifier
                                 .background(
-                                    if (isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                                    if (isSelected) MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f) else Color.Transparent,
                                     RoundedCornerShape(8.dp)
                                 )
                                 .border(
                                     1.dp,
-                                    if (isSelected && !isDeleteMode) Color.White else Color.White.copy(alpha = 0.2f),
+                                    if (isSelected && !isDeleteMode) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
                                     RoundedCornerShape(8.dp)
                                 )
                                 .pointerInput(fontName) {
@@ -1694,7 +1690,7 @@ fun AppearanceSettingsOverlay(
                             Text(
                                 text = fontName,
                                 fontFamily = getFontFamily(fontName, customFonts),
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 16.sp,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                             )
@@ -1713,6 +1709,87 @@ fun AppearanceSettingsOverlay(
                                     )
                                 }
                             }
+                        }
+            }
+            }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Theme section header
+            Text(
+                text = "Theme",
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Defined themes for selection
+            val themes = listOf(
+                Triple("Light", Color.White, Color.Black),
+                Triple("Dark", Color(0xFF1E1E1E), Color(0xFFE0E0E0)),
+                Triple("Sepia", Color(0xFFF4ECD8), Color(0xFF5B4636))
+            )
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(themes.size) { index ->
+                    val (themeName, bgColor, textColor) = themes[index]
+                    val isSelected = selectedThemeIndex == index
+                    Surface(
+                        onClick = { onThemeChange(index) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f)
+                        ),
+                        modifier = Modifier.width(100.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Mini mockup box representing the theme layout
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(55.dp)
+                                    .background(bgColor, RoundedCornerShape(6.dp))
+                                    .padding(8.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    // 3 mockup text lines
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.9f)
+                                            .height(3.dp)
+                                            .background(textColor.copy(alpha = 0.8f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.75f)
+                                            .height(3.dp)
+                                            .background(textColor.copy(alpha = 0.8f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.5f)
+                                            .height(3.dp)
+                                            .background(textColor.copy(alpha = 0.5f))
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = themeName,
+                                color = if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
                         }
                     }
                 }
@@ -1733,7 +1810,7 @@ fun TranslationPickerOverlay(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Header
         Box(
@@ -1744,7 +1821,7 @@ fun TranslationPickerOverlay(
         ) {
             Text(
                 text = "Bible Translation",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -1758,7 +1835,7 @@ fun TranslationPickerOverlay(
                 Icon(
                     painterResource(R.drawable.ic_close),
                     contentDescription = "Close",
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1772,7 +1849,7 @@ fun TranslationPickerOverlay(
             ) {
                 Text(
                     text = "No additional translations available.\nAdd .db files to assets/translations/.",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                     fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.padding(32.dp)
@@ -1792,13 +1869,13 @@ fun TranslationPickerOverlay(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = TranslationManager.displayName(code),
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 17.sp,
                                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                             )
                             Text(
                                 text = code,
-                                color = Color.White.copy(alpha = 0.4f),
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
                                 fontSize = 12.sp
                             )
                         }
@@ -1807,14 +1884,14 @@ fun TranslationPickerOverlay(
                                 modifier = Modifier
                                     .size(8.dp)
                                     .background(
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onBackground,
                                         shape = RoundedCornerShape(50)
                                     )
                             )
                         }
                     }
                     HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.07f),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f),
                         thickness = 0.5.dp,
                         modifier = Modifier.padding(horizontal = 20.dp)
                     )

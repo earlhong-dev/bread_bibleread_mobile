@@ -80,6 +80,15 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("font_style", style).apply()
     }
 
+    var selectedThemeIndex = prefs.getInt("theme_index", 1) // Default to 1 (Dark)
+        private set
+
+    fun saveThemeIndex(index: Int) {
+        if (index == selectedThemeIndex) return
+        selectedThemeIndex = index
+        prefs.edit().putInt("theme_index", index).apply()
+    }
+
     // Persisted selected highlight color
     val selectedHighlightColor = mutableStateOf<Color?>(
         if (prefs.contains("last_color")) Color(prefs.getInt("last_color", 0)) else null

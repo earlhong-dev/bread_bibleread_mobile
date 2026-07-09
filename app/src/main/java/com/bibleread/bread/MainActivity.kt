@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +44,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -105,7 +105,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val t0 = SystemClock.elapsedRealtime()
-        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -120,7 +119,23 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            BreadTheme {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val prefs = remember { context.getSharedPreferences("bible_prefs", android.content.Context.MODE_PRIVATE) }
+            var themeIndex by remember { mutableStateOf(prefs.getInt("theme_index", 1)) }
+            
+            DisposableEffect(prefs) {
+                val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                    if (key == "theme_index") {
+                        themeIndex = prefs.getInt("theme_index", 1)
+                    }
+                }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                onDispose {
+                    prefs.unregisterOnSharedPreferenceChangeListener(listener)
+                }
+            }
+
+            BreadTheme(themeIndex = themeIndex) {
                 MainApp(dbReady = dbReady)
             }
         }
@@ -166,11 +181,11 @@ fun MainApp(dbReady: State<Boolean>) {
                     HorizontalDivider(
                         modifier = Modifier.fillMaxWidth(),
                         thickness = 0.5.dp,
-                        color = Color.DarkGray
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
                     )
                     NavigationBar(
-                        containerColor = Color.Black,
-                        contentColor = Color.White,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                         tonalElevation = 0.dp,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -201,8 +216,8 @@ fun MainApp(dbReady: State<Boolean>) {
                                     }
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Color.White,
-                                    unselectedIconColor = Color.Gray,
+                                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                                     indicatorColor = Color.Transparent
                                 )
                             )

@@ -7,11 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.bibleread.bread.ui.theme.BackgroundDark
 
+import androidx.compose.material3.MaterialTheme
+
 @Composable
 fun JournalScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     )
 }

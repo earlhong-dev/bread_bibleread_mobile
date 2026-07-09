@@ -22,13 +22,13 @@ fun ChatsScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
             .padding(top = 16.dp)
     ) {
         // Header
         Text(
             text = "CHATS",
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
@@ -41,10 +41,10 @@ fun ChatsScreen() {
                 .padding(horizontal = 16.dp)
                 .height(48.dp),
             shape = RoundedCornerShape(12.dp),
-            color = Color(0xFFE0E0E0)
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f)
         ) {
             Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text("Search", color = Color.Gray)
+                Text("Search", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
             }
         }
 
@@ -65,7 +65,7 @@ fun ChatsScreen() {
         // Messages Header
         Text(
             text = "Messages",
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground,
             fontSize = 16.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
@@ -89,13 +89,13 @@ fun NoteItem(index: Int) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(80.dp)) {
         Box(
             modifier = Modifier
-                .background(Color.Gray, RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
                 .padding(8.dp)
         ) {
             Text(
                 text = notes.getOrElse(index) { "" },
                 fontSize = 10.sp,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 2,
                 lineHeight = 12.sp
             )
@@ -105,7 +105,7 @@ fun NoteItem(index: Int) {
             modifier = Modifier
                 .size(60.dp)
                 .clip(CircleShape)
-                .background(Color.DarkGray)
+                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
         )
     }
 }
@@ -122,13 +122,13 @@ fun ChatItem() {
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(Color.DarkGray)
+                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = "toaderrr", color = Color.White, fontWeight = FontWeight.SemiBold)
-            Text(text = "4 new messages", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(text = "toaderrr", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
+            Text(text = "4 new messages", color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
-        Text(text = "3m", color = Color.Gray, fontSize = 12.sp)
+        Text(text = "3m", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), fontSize = 12.sp)
     }
 }
