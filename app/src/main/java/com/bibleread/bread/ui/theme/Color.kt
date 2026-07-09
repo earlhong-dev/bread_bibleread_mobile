@@ -2,7 +2,7 @@ package com.bibleread.bread.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val BackgroundDark = Color(0xFF000000)
+val BackgroundDark = Color(0xFF18191A)
 val BreadTan       = Color(0xFFD4B483)
 val DarkGray       = Color(0xFF121212)
 

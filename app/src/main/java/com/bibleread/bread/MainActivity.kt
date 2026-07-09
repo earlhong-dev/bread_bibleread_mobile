@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.*
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
@@ -177,7 +179,9 @@ fun MainApp(dbReady: State<Boolean>) {
     Scaffold(
         bottomBar = {
             if (currentRoute != Screen.Splash.route) {
-                Column {
+                Column(
+                    modifier = Modifier.navigationBarsPadding()
+                ) {
                     HorizontalDivider(
                         modifier = Modifier.fillMaxWidth(),
                         thickness = 0.5.dp,
@@ -187,10 +191,10 @@ fun MainApp(dbReady: State<Boolean>) {
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.onSurface,
                         tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(72.dp)
-                            .padding(top = 4.dp, bottom = 4.dp)
+                            .height(64.dp)
                     ) {
                         items.forEach { screen ->
                             NavigationBarItem(

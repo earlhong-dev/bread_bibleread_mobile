@@ -292,6 +292,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                 Text(
                     text = selectedBook,
                     color = MaterialTheme.colorScheme.onBackground,
+                    fontFamily = getFontFamily(fontStyle, vm.customFonts),
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp,
                     maxLines = 1,
@@ -541,13 +542,17 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             val allSelectedAreHighlighted = selectedVerses.isNotEmpty() &&
                 selectedVerses.all { highlights.containsKey(it) }
 
-            // Use Box so Row 2 slides over Row 1 from the same position
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
-                contentAlignment = Alignment.BottomCenter
+            // Background flat dock for bottom buttons
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface
             ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
                 // ── Row 1: prev / book+chapter / next ─────────────────────────
                 Box(
                     modifier = Modifier
@@ -594,8 +599,8 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                             Text(
                                 text = "$selectedBook $targetChapter",
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = if (hasSelection) 0.3f else 1f),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
@@ -915,6 +920,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         }
                     }
                 }
+            }
             }
         }
 
