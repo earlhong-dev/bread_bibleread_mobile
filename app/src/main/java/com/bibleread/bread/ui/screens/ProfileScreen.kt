@@ -42,7 +42,6 @@ import androidx.core.content.FileProvider
 import coil.compose.rememberAsyncImagePainter
 import com.bibleread.bread.R
 import com.bibleread.bread.data.BibleDatabase
-import com.bibleread.bread.ui.theme.BackgroundDark
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -249,7 +248,7 @@ private fun ProfileContent() {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Text("toaderrr", color = MaterialTheme.colorScheme.onBackground, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+        Text("Username", color = MaterialTheme.colorScheme.onBackground, fontSize = 24.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp))
         Spacer(modifier = Modifier.height(32.dp))
 

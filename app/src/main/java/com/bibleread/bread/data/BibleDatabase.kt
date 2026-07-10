@@ -89,10 +89,14 @@ abstract class BibleDatabase : RoomDatabase() {
         /**
          * Call this when the user switches translations so the next
          * getInstance() opens the new DB fresh.
+         * Closes the evicted instance to release SQLite file handles.
          */
         fun clearInstance(translationCode: String) {
             synchronized(this) {
-                instances.remove(translationCode)
+                val old = instances.remove(translationCode)
+                if (old != null && old.isOpen) {
+                    try { old.close() } catch (_: Exception) { }
+                }
             }
         }
 
@@ -100,6 +104,12 @@ abstract class BibleDatabase : RoomDatabase() {
             val dbName    = TranslationManager.dbName(translationCode)
             val assetPath = TranslationManager.assetPath(translationCode)
 
+            // Migration strategy:
+            // - Pre-built asset DBs are always shipped at the current schema version,
+            //   so destructive migration is safe for them (data is never user-generated).
+            // - The user-generated data (bookmarks, highlights) lives in SharedPreferences,
+            //   NOT in this database, so destructive migration doesn't lose user content.
+            // If you ever store user data in Room, replace this with explicit migrations.
             val builder = Room.databaseBuilder(
                 context.applicationContext,
                 BibleDatabase::class.java,
@@ -109,7 +119,7 @@ abstract class BibleDatabase : RoomDatabase() {
             // Check if a pre-built .db exists in assets/translations/
             val hasPrebuilt = try {
                 context.assets.open(assetPath).use { true }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
 

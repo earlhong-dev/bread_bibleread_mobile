@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import java.io.File
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.graphics.Color
@@ -62,7 +64,8 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putInt("last_scroll_index", index).apply()
     }
 
-    var fontSize = prefs.getFloat("font_size", 18f)
+    // Observable appearance settings so composables recompose immediately
+    var fontSize by mutableStateOf(prefs.getFloat("font_size", 18f))
         private set
 
     fun saveFontSize(size: Float) {
@@ -71,7 +74,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putFloat("font_size", size).apply()
     }
 
-    var fontStyle = prefs.getString("font_style", "Sans-Serif") ?: "Sans-Serif"
+    var fontStyle by mutableStateOf(prefs.getString("font_style", "Sans-Serif") ?: "Sans-Serif")
         private set
 
     fun saveFontStyle(style: String) {
@@ -80,7 +83,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("font_style", style).apply()
     }
 
-    var selectedThemeIndex = prefs.getInt("theme_index", 1) // Default to 1 (Dark)
+    var selectedThemeIndex by mutableStateOf(prefs.getInt("theme_index", 1)) // Default to 1 (Dark)
         private set
 
     fun saveThemeIndex(index: Int) {
@@ -103,14 +106,16 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
 
     // Highlights: verseKey ("book-chapter-verse") → Color
     val highlights = mutableStateMapOf<String, Color>().apply {
-        val saved = prefs.getString("highlights_json", "{}")
+        val saved = prefs.getString("highlights_json", "{}") ?: "{}"
         try {
-            val json = JSONObject(saved!!)
+            val json = JSONObject(saved)
             json.keys().forEach { key ->
-                put(key, Color(json.getInt(key)))
+                // Silently skip any malformed entries instead of crashing
+                try { put(key, Color(json.getInt(key))) } catch (_: Exception) { }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.w("BibleViewModel", "highlights_json corrupted, resetting: ${e.message}")
+            // Leave map empty — user loses highlights but app stays functional
         }
     }
 
@@ -122,14 +127,14 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
 
     // Custom colors saved by the user
     val customColors = mutableStateListOf<Color>().apply {
-        val saved = prefs.getString("custom_colors_json", "[]")
+        val saved = prefs.getString("custom_colors_json", "[]") ?: "[]"
         try {
-            val array = JSONArray(saved!!)
+            val array = JSONArray(saved)
             for (i in 0 until array.length()) {
-                add(Color(array.getInt(i)))
+                try { add(Color(array.getInt(i))) } catch (_: Exception) { }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.w("BibleViewModel", "custom_colors_json corrupted, resetting: ${e.message}")
         }
     }
 
@@ -152,6 +157,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     var lastCustomHex = prefs.getString("last_custom_hex", "FF0000") ?: "FF0000"
+        private set
 
     fun saveLastCustomHex(hex: String) {
         lastCustomHex = hex
@@ -183,9 +189,18 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
                     if (cursor.moveToFirst()) {
                         val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                         if (nameIndex != -1) {
-                            fileName = cursor.getString(nameIndex)
+                            val rawName = cursor.getString(nameIndex) ?: fileName
+                            // Strip any path components from the display name to prevent traversal
+                            fileName = File(rawName).name.ifBlank { fileName }
                         }
                     }
+                }
+
+                // Only allow .ttf and .otf files
+                val ext = fileName.substringAfterLast('.', "").lowercase()
+                if (ext != "ttf" && ext != "otf") {
+                    android.util.Log.w("BibleViewModel", "Rejected non-font file: $fileName")
+                    return@launch
                 }
                 
                 val targetFile = File(fontsDir, fileName)
@@ -199,7 +214,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
                     loadCustomFonts()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("BibleViewModel", "Failed to import font: ${e.message}", e)
             }
         }
     }

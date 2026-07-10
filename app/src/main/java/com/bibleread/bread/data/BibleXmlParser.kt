@@ -13,6 +13,12 @@ object BibleXmlParser {
         val sanitizedFileName = fileName.replace("[\\/\n\r]".toRegex(), "_")
         Log.d(TAG, "Starting parse of $sanitizedFileName")
 
+        // Guard against path traversal — only allow simple filenames with no directory separators
+        if (fileName.contains('/') || fileName.contains('\\') || fileName.contains("..")) {
+            Log.e(TAG, "Rejected unsafe asset path: $sanitizedFileName")
+            return
+        }
+
         val verses = mutableListOf<VerseEntity>()
 
         context.assets.open(fileName).use { inputStream ->

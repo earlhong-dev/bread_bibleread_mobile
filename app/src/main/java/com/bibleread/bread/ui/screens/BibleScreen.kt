@@ -10,17 +10,18 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -32,13 +33,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.SnapshotStateSet
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -54,7 +56,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bibleread.bread.R
 import com.bibleread.bread.data.TranslationManager
-import com.bibleread.bread.ui.theme.BackgroundDark
 import com.bibleread.bread.viewmodel.BibleUiState
 import com.bibleread.bread.viewmodel.BibleViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -130,27 +131,20 @@ fun getBookAbbreviation(bookName: String): String =
 
 
 @Composable
-fun BibleScreen(vm: BibleViewModel = viewModel()) {
+fun BibleScreen(
+    vm: BibleViewModel = viewModel(),
+    onOpenBookSelection: ((String, Int) -> Unit) -> Unit = {},
+    onOpenAppearance: () -> Unit = {}
+) {
     val books = BIBLE_BOOKS.keys.toList()
 
     var selectedBook by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(vm.lastBook) }
-    var showBookSelection by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var targetChapter by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(vm.lastChapter) }
 
-    var fontSize by androidx.compose.runtime.saveable.rememberSaveable { mutableFloatStateOf(vm.fontSize) }
-    var fontStyle by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(vm.fontStyle) }
-    var showSettings by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val fontSize = vm.fontSize
+    val fontStyle = vm.fontStyle
     var showTranslationPicker by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var showSelectedVersesWindow by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-
-    // SAF launcher for importing custom fonts
-    val fontFileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) vm.importCustomFont(uri)
-    }
-
-    // Highlights panel — shown when any verse is selected
     val selectedVerses = androidx.compose.runtime.saveable.rememberSaveable(
         saver = androidx.compose.runtime.saveable.listSaver(
             save = { it.toList() },
@@ -273,6 +267,16 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
     )
     // ─────────────────────────────────────────────────────────────────────────
 
+    val hasSelection = selectedVerses.isNotEmpty()
+
+    val swipeDensity = LocalDensity.current
+    val swipeThresholdPx = with(swipeDensity) { 60.dp.toPx() }
+    var swipeAccumulator by remember { mutableFloatStateOf(0f) }
+
+    val currentFontFamily = remember(fontStyle, vm.customFonts) {
+        getFontFamily(fontStyle, vm.customFonts)
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         Column(
@@ -285,49 +289,40 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 8.dp)
+                    .zIndex(1f)
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(top = 14.dp, bottom = 2.dp)
                     .graphicsLayer { alpha = headerAlpha },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = selectedBook,
                     color = MaterialTheme.colorScheme.onBackground,
-                    fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                    fontFamily = currentFontFamily,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp,
                     maxLines = 1,
                     fontSize = 20.sp,
-                    modifier = Modifier.padding(horizontal = 56.dp),
                     softWrap = false,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-
-                // Version button — left
-                Surface(
-                    onClick = { showTranslationPicker = true },
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 14.dp)
-                ) {
-                    Text(
-                        text = TranslationManager.displayName(activeTranslation),
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                        maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                    )
-                }
+                        .padding(horizontal = 56.dp)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            if (!hasSelection) onOpenBookSelection { book, chapter ->
+                                requestChapter(book, chapter)
+                            }
+                        }
+                )
 
                 // Settings icon — right
                 IconButton(
-                    onClick = { showSettings = true },
+                    onClick = { onOpenAppearance() },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 12.dp)
+                        .padding(end = 14.dp)
                         .size(32.dp)
                 ) {
                     Icon(
@@ -338,6 +333,14 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     )
                 }
             }
+
+
+            // ── Content area with sticky overlay ──────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
 
             // ── Content ───────────────────────────────────────────────────────
             when (val state = uiState) {
@@ -370,19 +373,43 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 36.dp)
-                            .graphicsLayer { alpha = contentAlpha },
+                            .graphicsLayer { alpha = contentAlpha }
+                            .pointerInput(hasSelection) {
+                                if (!hasSelection) {
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { swipeAccumulator = 0f },
+                                        onDragEnd = {
+                                            if (swipeAccumulator < -swipeThresholdPx) {
+                                                val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
+                                                if (targetChapter < maxChapter)
+                                                    requestChapter(selectedBook, targetChapter + 1)
+                                            } else if (swipeAccumulator > swipeThresholdPx) {
+                                                if (targetChapter > 1)
+                                                    requestChapter(selectedBook, targetChapter - 1)
+                                            }
+                                            swipeAccumulator = 0f
+                                        },
+                                        onDragCancel = { swipeAccumulator = 0f },
+                                        onHorizontalDrag = { _, dragAmount ->
+                                            swipeAccumulator += dragAmount
+                                        }
+                                    )
+                                }
+                            },
                         contentPadding = PaddingValues(top = 0.dp, bottom = 80.dp)
                     ) {
                         versesByChapter.forEach { (chapter, verses) ->
                             item(key = "$selectedBook-$chapter-header") {
                                 Box(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 14.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = chapter.toString(),
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-                                        fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                        fontFamily = currentFontFamily,
                                         fontSize = (fontSize * 3.55f).sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         letterSpacing = 2.sp
@@ -398,7 +425,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                     Text(
                                         text = verse.heading,
                                         color = MaterialTheme.colorScheme.onBackground,
-                                        fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                        fontFamily = currentFontFamily,
                                         fontSize = (fontSize * 1.1f).sp,
                                         fontWeight = FontWeight.Bold,
                                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -412,7 +439,7 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                         Text(
                                             text = verse.subheading,
                                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                            fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                            fontFamily = currentFontFamily,
                                             fontSize = (fontSize * 0.7f).sp,
                                             fontWeight = FontWeight.Normal,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -448,13 +475,13 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                         )
                                 ) {
                                     val normalTextColor = MaterialTheme.colorScheme.onBackground
-                                    Text(
-                                        text = buildAnnotatedString {
+                                    val annotatedText = remember(verse, isSelected, fontSize, currentFontFamily, normalTextColor) {
+                                        buildAnnotatedString {
                                             withStyle(
                                                 SpanStyle(
                                                     color = normalTextColor.copy(alpha = 0.5f),
                                                     fontWeight = FontWeight.Bold,
-                                                    fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                                    fontFamily = currentFontFamily,
                                                     fontSize = (fontSize * 0.65f).sp,
                                                     textDecoration = if (isSelected)
                                                         androidx.compose.ui.text.style.TextDecoration.Underline
@@ -464,14 +491,18 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                                             withStyle(
                                                 SpanStyle(
                                                     color = normalTextColor,
-                                                    fontFamily = getFontFamily(fontStyle, vm.customFonts),
+                                                    fontFamily = currentFontFamily,
                                                     fontSize = fontSize.sp,
                                                     textDecoration = if (isSelected)
                                                         androidx.compose.ui.text.style.TextDecoration.Underline
                                                     else null
                                                 )
                                             ) { append(verse.text.trim()) }
-                                        },
+                                        }
+                                    }
+
+                                    Text(
+                                        text = annotatedText,
                                         onTextLayout = { textLayout.value = it },
                                         lineHeight = (fontSize * 1.9).sp,
                                         modifier = Modifier.drawBehind {
@@ -505,17 +536,53 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     }
                 }
             }
+
+            val showStickyChapter by remember(listState) {
+                derivedStateOf {
+                    listState.firstVisibleItemIndex > 0
+                }
+            }
+
+            var displayedStickyChapter by remember { mutableIntStateOf(targetChapter) }
+            LaunchedEffect(showStickyChapter, targetChapter, contentVisible) {
+                if (showStickyChapter && contentVisible) {
+                    displayedStickyChapter = targetChapter
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showStickyChapter,
+                enter = slideInVertically(animationSpec = tween(200)) { -it } + fadeIn(tween(200)),
+                exit = slideOutVertically(animationSpec = tween(200)) { -it } + fadeOut(tween(200)),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(top = 0.dp, bottom = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Chapter $displayedStickyChapter",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        fontFamily = currentFontFamily,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
+    }
 
 
-        // ── Bottom bar ────────────────────────────────────────────────────────
+
         // Row 1 (prev/book/next) + Row 2 (selection actions) stacked in a Column
-        AnimatedVisibility(
+        androidx.compose.animation.AnimatedVisibility(
             visible = bottomBarReady,
-            enter = slideInVertically(animationSpec = tween(400)) { it } + fadeIn(tween(400)),
+            enter = fadeIn(animationSpec = tween(400)),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            val hasSelection = selectedVerses.isNotEmpty()
 
             // Build verse range label: "GEN 1:1" or "GEN 1:1-4"
             val verseRangeLabel = run {
@@ -550,88 +617,12 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                // ── Row 1: prev / book+chapter / next ─────────────────────────
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(32.dp))
-                        .padding(horizontal = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(0.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                    // Prev
-                    Surface(
-                        onClick = {
-                            if (targetChapter > 1) requestChapter(selectedBook, targetChapter - 1)
-                        },
-                        enabled = !hasSelection,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_chevron_left),
-                                contentDescription = "Previous",
-                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = if (hasSelection) 0.3f else 1f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    // Book + chapter selector
-                    Surface(
-                        onClick = { showBookSelection = true },
-                        enabled = !hasSelection,
-                        shape = androidx.compose.ui.graphics.RectangleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.weight(1f).height(44.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "$selectedBook $targetChapter",
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = if (hasSelection) 0.3f else 1f),
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 12.dp)
-                            )
-                        }
-                    }
-
-                    // Next
-                    Surface(
-                        onClick = {
-                            val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
-                            if (targetChapter < maxChapter) requestChapter(selectedBook, targetChapter + 1)
-                        },
-                        enabled = !hasSelection,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_chevron_right),
-                                contentDescription = "Next",
-                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = if (hasSelection) 0.3f else 1f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                } // end Row 1
-                } // end Row 1 container Box
 
                 // ── Row 2: selection actions — slides up over Row 1 ───────────
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = hasSelection,
                     enter = slideInVertically(tween(300)) { it } + fadeIn(tween(300)),
                     exit = slideOutVertically(tween(250)) { it } + fadeOut(tween(200))
@@ -924,46 +915,6 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
             }
         }
 
-        // ── Settings overlay ──────────────────────────────────────────────────
-        if (showSettings) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) { /* consume all touches behind overlay */ }
-            )
-        }
-        AnimatedVisibility(
-            visible = showSettings,
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut()
-        ) {
-            var selectedThemeIndex by remember { mutableStateOf(vm.selectedThemeIndex) }
-            AppearanceSettingsOverlay(
-                currentFontSize = fontSize,
-                onFontSizeChange = { 
-                    fontSize = it
-                    vm.saveFontSize(it)
-                },
-                currentFontStyle = fontStyle,
-                onFontStyleChange = {
-                    fontStyle = it
-                    vm.saveFontStyle(it)
-                },
-                customFonts = vm.customFonts,
-                selectedThemeIndex = selectedThemeIndex,
-                onThemeChange = { index ->
-                    selectedThemeIndex = index
-                    vm.saveThemeIndex(index)
-                },
-                onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
-                onRemoveFont = { vm.removeCustomFont(it) },
-                onClose = { showSettings = false }
-            )
-        }
-
         // ── Translation picker overlay ────────────────────────────────────────
         if (showTranslationPicker) {
             Box(
@@ -988,32 +939,6 @@ fun BibleScreen(vm: BibleViewModel = viewModel()) {
                     vm.switchTranslation(code)
                 },
                 onClose = { showTranslationPicker = false }
-            )
-        }
-
-        // ── Book selection overlay ────────────────────────────────────────────
-        if (showBookSelection) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) { }
-            )
-        }
-        AnimatedVisibility(
-            visible = showBookSelection,
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut()
-        ) {
-            BookSelectionOverlay(
-                books = books,
-                onBookSelected = { book, chapter ->
-                    showBookSelection = false
-                    requestChapter(book, chapter)
-                },
-                onClose = { showBookSelection = false }
             )
         }
 
@@ -1146,6 +1071,8 @@ private val NEW_TESTAMENT = listOf(
 @Composable
 fun BookSelectionOverlay(
     books: List<String>,
+    activeTranslationName: String = "",
+    onTranslationClick: () -> Unit = {},
     onBookSelected: (String, Int) -> Unit,
     onClose: () -> Unit
 ) {
@@ -1185,6 +1112,7 @@ fun BookSelectionOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .systemBarsPadding()
     ) {
         // ── Header ────────────────────────────────────────────────────────────
         Box(
@@ -1216,6 +1144,12 @@ fun BookSelectionOverlay(
         }
 
         // ── Search ────────────────────────────────────────────────────────────
+        CompositionLocalProvider(
+            LocalTextSelectionColors provides TextSelectionColors(
+                handleColor = MaterialTheme.colorScheme.onBackground,
+                backgroundColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
+            )
+        ) {
         Surface(
             shape = RoundedCornerShape(10.dp),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
@@ -1262,6 +1196,7 @@ fun BookSelectionOverlay(
                             fontSize = 15.sp,
                             lineHeight = 15.sp
                         ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.onBackground),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1283,7 +1218,42 @@ fun BookSelectionOverlay(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        } // end CompositionLocalProvider
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // ── Placeholder button ────────────────────────────────────────────────
+        Surface(
+            onClick = onTranslationClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Bible Version",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal
+                )
+                Text(
+                    text = activeTranslationName,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // ── Book list ─────────────────────────────────────────────────────────
         LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -1374,32 +1344,36 @@ private fun BookRow(
             enter = fadeIn(tween(200)) + expandVertically(tween(250)),
             exit = fadeOut(tween(150)) + shrinkVertically(tween(200))
         ) {
-            FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                (1..chapters).forEach { chapter ->
-                    Surface(
-                        onClick = { onChapterSelected(chapter) },
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
-                        modifier = Modifier.size(44.dp)
+            if (isExpanded) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = chapter.toString(),
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                        (1..chapters).forEach { chapter ->
+                            Surface(
+                                onClick = { onChapterSelected(chapter) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = chapter.toString(),
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
         }
 
         HorizontalDivider(
@@ -1431,6 +1405,7 @@ fun AppearanceSettingsOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .systemBarsPadding()
     ) {
         // ── Header ────────────────────────────────────────────────────────────
         Box(

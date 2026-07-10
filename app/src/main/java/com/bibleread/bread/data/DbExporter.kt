@@ -17,6 +17,13 @@ object DbExporter {
      */
     fun exportFromXml(context: Context, xmlFileName: String) {
         val sanitizedXml = xmlFileName.replace("[\\/\n\r]".toRegex(), "_")
+
+        // Guard against path traversal
+        if (xmlFileName.contains('/') || xmlFileName.contains('\\') || xmlFileName.contains("..")) {
+            Log.e(TAG, "Rejected unsafe export path: $sanitizedXml")
+            return
+        }
+
         val dbName = TranslationManager.dbName(sanitizedXml.removeSuffix(".xml"))
         val dbFile = context.getDatabasePath(dbName)
 
