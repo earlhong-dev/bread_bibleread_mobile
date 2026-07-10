@@ -1112,7 +1112,6 @@ fun BookSelectionOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .systemBarsPadding()
     ) {
         // ── Header ────────────────────────────────────────────────────────────
         Box(
@@ -1405,7 +1404,6 @@ fun AppearanceSettingsOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .systemBarsPadding()
     ) {
         // ── Header ────────────────────────────────────────────────────────────
         Box(

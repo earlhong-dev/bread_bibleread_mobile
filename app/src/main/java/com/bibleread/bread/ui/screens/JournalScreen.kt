@@ -271,7 +271,7 @@ fun ViewNoteScreen(
         onSaveEdit(updated)
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding()) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
 
         // ── Top bar ───────────────────────────────────────────────────────────
         Box(modifier = Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
@@ -410,7 +410,7 @@ fun NewNoteScreen(
 
     LaunchedEffect(Unit) { titleFocus.requestFocus() }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding()) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
 
         // ── Top bar ───────────────────────────────────────────────────────────
         Box(modifier = Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
