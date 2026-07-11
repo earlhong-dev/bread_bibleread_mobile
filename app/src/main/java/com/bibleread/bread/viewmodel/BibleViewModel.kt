@@ -54,15 +54,9 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
     var lastChapter = prefs.getInt("last_chapter", 1)
         private set
 
-    // Last scroll index within the chapter list (item index in LazyColumn)
-    var lastScrollIndex = prefs.getInt("last_scroll_index", 0)
+    // Scroll position is intentionally not persisted so the Bible tab always opens at the start of the chapter.
+    var lastScrollIndex = 0
         private set
-
-    fun saveScrollIndex(index: Int) {
-        if (index == lastScrollIndex) return
-        lastScrollIndex = index
-        prefs.edit().putInt("last_scroll_index", index).apply()
-    }
 
     // Observable appearance settings so composables recompose immediately
     var fontSize by mutableStateOf(prefs.getFloat("font_size", 18f))
@@ -261,7 +255,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         lastChapter = chapter
         if (resetScroll) {
             lastScrollIndex = 0
-            prefs.edit().putString("last_book", book).putInt("last_chapter", chapter).putInt("last_scroll_index", 0).apply()
+            prefs.edit().putString("last_book", book).putInt("last_chapter", chapter).apply()
         } else {
             prefs.edit().putString("last_book", book).putInt("last_chapter", chapter).apply()
         }

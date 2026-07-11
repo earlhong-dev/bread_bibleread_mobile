@@ -183,9 +183,6 @@ fun BibleScreen(
     var headerReady by remember { mutableStateOf(false) }
     var hasInitialized by remember { mutableStateOf(false) }
 
-    // bottomBarReady: same — slides up once on first load
-    var bottomBarReady by remember { mutableStateOf(false) }
-
     // contentVisible: resets to false every time a chapter change is requested,
     // flips back to true when the new data arrives and is ready to render
     var contentVisible by remember { mutableStateOf(false) }
@@ -204,65 +201,38 @@ fun BibleScreen(
             val verses = (uiState as BibleUiState.Success).verses
             val versesByChapter = verses.groupBy { it.chapter }
 
-            // First-ever load: restore the persisted scroll index directly.
-            // Subsequent chapter navigations: scroll to the chapter header.
-            if (!hasInitialized) {
-                val savedIndex = vm.lastScrollIndex
-                if (savedIndex > 0) {
-                    listState.scrollToItem(savedIndex)
-                } else {
-                    var targetIndex = 0
-                    for ((chapter, chapterVerses) in versesByChapter) {
-                        if (chapter == targetChapter) break
-                        targetIndex += 1
-                        targetIndex += chapterVerses.size
-                        targetIndex += 1
-                    }
-                    listState.scrollToItem(targetIndex)
-                }
-            } else {
-                // Navigated to a new chapter — scroll to its header
-                var targetIndex = 0
-                for ((chapter, chapterVerses) in versesByChapter) {
-                    if (chapter == targetChapter) break
-                    targetIndex += 1
-                    targetIndex += chapterVerses.size
-                    targetIndex += 1
-                }
-                listState.scrollToItem(targetIndex)
+            var targetIndex = 0
+            for ((chapter, chapterVerses) in versesByChapter) {
+                if (chapter == targetChapter) break
+                targetIndex += 1
+                targetIndex += chapterVerses.size
+                targetIndex += 1
             }
+            listState.scrollToItem(targetIndex)
 
             // First-ever load: bring in header and bottom bar
             if (!hasInitialized) {
-                delay(200) // let the screen settle before animating in
+                delay(90) // let the screen settle before animating in
                 headerReady = true
-                bottomBarReady = true
                 hasInitialized = true
             }
 
             // Every load: fade in content
-            delay(80)
+            delay(35)
             contentVisible = true
-        }
-    }
-
-    // Persist scroll position continuously while the user scrolls
-    LaunchedEffect(listState.firstVisibleItemIndex) {
-        if (hasInitialized) {
-            vm.saveScrollIndex(listState.firstVisibleItemIndex)
         }
     }
 
     // ── Animated values ───────────────────────────────────────────────────────
     val headerAlpha by animateFloatAsState(
         targetValue = if (headerReady) 1f else 0f,
-        animationSpec = tween(300),
+        animationSpec = tween(220),
         label = "headerAlpha"
     )
 
     val contentAlpha by animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
-        animationSpec = if (contentVisible) tween(250) else snap(), // instant hide, animated show
+        animationSpec = if (contentVisible) tween(220) else snap(), // instant hide, animated show
         label = "contentAlpha"
     )
     // ─────────────────────────────────────────────────────────────────────────
@@ -277,6 +247,19 @@ fun BibleScreen(
         getFontFamily(fontStyle, vm.customFonts)
     }
 
+    val showChapterLabel by remember(listState, contentVisible) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 && contentVisible
+        }
+    }
+
+    var displayedChapterLabel by remember { mutableIntStateOf(targetChapter) }
+    LaunchedEffect(showChapterLabel, targetChapter, contentVisible) {
+        if (showChapterLabel) {
+            displayedChapterLabel = targetChapter
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         Column(
@@ -289,25 +272,29 @@ fun BibleScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = 20.dp, bottom = 18.dp)
                     .zIndex(1f)
                     .background(MaterialTheme.colorScheme.background)
-                    .padding(top = 14.dp, bottom = 2.dp)
                     .graphicsLayer { alpha = headerAlpha },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = selectedBook,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontFamily = currentFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1,
-                    fontSize = 20.sp,
-                    softWrap = false,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                Box(
                     modifier = Modifier
-                        .padding(horizontal = 56.dp)
-                        .clickable(
+                        .fillMaxWidth()
+                        .padding(horizontal = 56.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = selectedBook,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontFamily = currentFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        fontSize = 20.sp,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
                         ) {
@@ -315,7 +302,23 @@ fun BibleScreen(
                                 requestChapter(book, chapter)
                             }
                         }
-                )
+                    )
+
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showChapterLabel,
+                        enter = slideInVertically(initialOffsetY = { it / 4 }, animationSpec = tween(160)),
+                        exit = slideOutVertically(targetOffsetY = { it / 4 }, animationSpec = tween(120)),
+                        modifier = Modifier.align(Alignment.Center).offset(y = 20.dp)
+                    ) {
+                        Text(
+                            text = "Chapter $displayedChapterLabel",
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            fontFamily = currentFontFamily,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
 
                 // Settings icon — right
                 IconButton(
@@ -403,7 +406,7 @@ fun BibleScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 14.dp),
+                                        .padding(top = 0.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -550,370 +553,9 @@ fun BibleScreen(
                 }
             }
 
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showStickyChapter,
-                enter = slideInVertically(animationSpec = tween(200)) { -it } + fadeIn(tween(200)),
-                exit = slideOutVertically(animationSpec = tween(200)) { -it } + fadeOut(tween(200)),
-                modifier = Modifier.align(Alignment.TopCenter)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(top = 0.dp, bottom = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Chapter $displayedStickyChapter",
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        fontFamily = currentFontFamily,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
         }
     }
 
-
-
-        // Row 1 (prev/book/next) + Row 2 (selection actions) stacked in a Column
-        androidx.compose.animation.AnimatedVisibility(
-            visible = bottomBarReady,
-            enter = fadeIn(animationSpec = tween(400)),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-
-            // Build verse range label: "GEN 1:1" or "GEN 1:1-4"
-            val verseRangeLabel = run {
-                val verseNums = selectedVerses
-                    .filter { it.startsWith("$selectedBook-$targetChapter-") }
-                    .mapNotNull { it.substringAfterLast("-").toIntOrNull() }
-                    .sorted()
-                val abbrev = getBookAbbreviation(selectedBook)
-                if (verseNums.isEmpty()) {
-                    "$abbrev $targetChapter"
-                } else {
-                    val isAllConsecutive = verseNums.last() - verseNums.first() == verseNums.size - 1
-                    val suffix = when {
-                        verseNums.size == 1 -> ":${verseNums.first()}"
-                        isAllConsecutive -> ":${verseNums.first()}-${verseNums.last()}"
-                        verseNums.size == 2 -> ":${verseNums[0]}, ${verseNums[1]}"
-                        else -> ":${verseNums.first()}..${verseNums.last()}"
-                    }
-                    "$abbrev $targetChapter$suffix"
-                }
-            }
-
-            // True when every selected verse already has a highlight
-            val allSelectedAreHighlighted = selectedVerses.isNotEmpty() &&
-                selectedVerses.all { highlights.containsKey(it) }
-
-            // Background flat dock for bottom buttons
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-
-                // ── Row 2: selection actions — slides up over Row 1 ───────────
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = hasSelection,
-                    enter = slideInVertically(tween(300)) { it } + fadeIn(tween(300)),
-                    exit = slideOutVertically(tween(250)) { it } + fadeOut(tween(200))
-                ) {
-                    // Pastel preset colors + custom (defined at top level)
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(0.dp)
-                    ) {
-                        // Main Row 2 buttons
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(32.dp))
-                                .padding(horizontal = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (showColorPickerRow) {
-                                    androidx.compose.foundation.lazy.LazyRow(
-                                        state = colorListState,
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(44.dp)
-                                            .clip(RoundedCornerShape(22.dp)),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        contentPadding = PaddingValues(horizontal = 8.dp)
-                                    ) {
-                                        // Custom color circle (color wheel + plus)
-                                        item {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .background(
-                                                        brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                                                            colors = listOf(
-                                                                Color(0xFFFF6B6B), Color(0xFFFF9F43),
-                                                                Color(0xFFFFDD59), Color(0xFF54D47A),
-                                                                Color(0xFF48BEFF), Color(0xFFA55EEA),
-                                                                Color(0xFFFF6EB4), Color(0xFFFF6B6B)
-                                                            )
-                                                        ),
-                                                        shape = CircleShape
-                                                    )
-                                                    .clickable(
-                                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                                        indication = null
-                                                    ) { showCustomColorPicker = true },
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text("+", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                        // Preset color circles
-                                        items(presetColors) { color ->
-                                            val isChosen = selectedHighlightColor == color
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .background(color, CircleShape)
-                                                    .then(
-                                                        if (isChosen) Modifier.border(2.dp, MaterialTheme.colorScheme.onBackground, CircleShape)
-                                                        else Modifier
-                                                    )
-                                                    .clickable(
-                                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                                        indication = null
-                                                    ) { vm.selectHighlightColor(color) }
-                                            )
-                                        }
-
-                                        // Separator line if there are custom colors
-                                        if (vm.customColors.isNotEmpty()) {
-                                            item {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .width(2.dp)
-                                                        .height(24.dp)
-                                                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f), RoundedCornerShape(1.dp))
-                                                )
-                                            }
-                                        }
-
-                                        // Custom color circles
-                                        items(vm.customColors.toList()) { color ->
-                                            val isChosen = selectedHighlightColor == color
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .background(color, CircleShape)
-                                                    .then(
-                                                        if (isChosen && !isDeleteMode) Modifier.border(2.dp, MaterialTheme.colorScheme.onBackground, CircleShape)
-                                                        else Modifier
-                                                    )
-                                                    .pointerInput(color) {
-                                                        detectTapGestures(
-                                                            onLongPress = { isDeleteMode = true },
-                                                            onTap = {
-                                                                if (isDeleteMode) {
-                                                                    vm.removeCustomColor(color)
-                                                                    isDeleteMode = false
-                                                                } else {
-                                                                    vm.selectHighlightColor(color)
-                                                                }
-                                                            }
-                                                        )
-                                                    },
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (isDeleteMode) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .background(Color.Black.copy(alpha = 0.55f), CircleShape),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.ic_trash_lucide),
-                                                            contentDescription = "Delete",
-                                                            tint = Color.White,
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Highlight apply / eraser button (Pencil for color picker)
-                                    val isEraserMode = allSelectedAreHighlighted && selectedVerses.all { highlights[it] == selectedHighlightColor }
-                                    Surface(
-                                        onClick = {
-                                            if (isEraserMode) {
-                                                selectedVerses.forEach { vm.removeHighlight(it) }
-                                                showColorPickerRow = false
-                                                isDeleteMode = false
-                                            } else {
-                                                selectedHighlightColor?.let {
-                                                    vm.applyHighlight(selectedVerses.toSet(), it)
-                                                    showColorPickerRow = false
-                                                    isDeleteMode = false
-                                                }
-                                            }
-                                        },
-                                        enabled = isEraserMode || selectedHighlightColor != null,
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            val iconRes = if (isEraserMode) R.drawable.ic_eraser else R.drawable.ic_pencil_line
-                                            val isAct = isEraserMode || selectedHighlightColor != null
-                                            Icon(
-                                                painter = painterResource(iconRes),
-                                                contentDescription = if (isEraserMode) "Remove Highlight" else "Apply Highlight",
-                                                tint = if (isAct) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    // Share button
-                                    Surface(
-                                        onClick = { showSelectedVersesWindow = true },
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_share2_lucide),
-                                                contentDescription = "Share",
-                                                tint = MaterialTheme.colorScheme.onBackground,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-
-                                    // Verse range label (non-clickable) - takes remaining space
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(44.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = verseRangeLabel,
-                                            color = MaterialTheme.colorScheme.onBackground,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1
-                                        )
-                                    }
-
-                                    // Bookmark button (in normal mode) - Ready for new bookmark logic!
-                                    Surface(
-                                        onClick = {
-                                            // TODO: Add bookmark logic here
-                                        },
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_highlight),
-                                                contentDescription = "Bookmark",
-                                                tint = MaterialTheme.colorScheme.onBackground,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                if (!showColorPickerRow) {
-                                    // Color picker toggle button
-                                    Surface(
-                                        onClick = { showColorPickerRow = true },
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            if (selectedHighlightColor == null) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(22.dp)
-                                                        .background(
-                                                            brush = androidx.compose.ui.graphics.Brush.sweepGradient(
-                                                                colors = listOf(
-                                                                    Color(0xFFFF6B6B), Color(0xFFFF9F43),
-                                                                    Color(0xFFFFDD59), Color(0xFF54D47A),
-                                                                    Color(0xFF48BEFF), Color(0xFFA55EEA),
-                                                                    Color(0xFFFF6EB4), Color(0xFFFF6B6B)
-                                                                )
-                                                            ),
-                                                            shape = CircleShape
-                                                        )
-                                                )
-                                            } else {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(22.dp)
-                                                        .background(selectedHighlightColor!!, CircleShape)
-                                                        .border(1.5.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), CircleShape)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // X — white icon (close / paintbrush)
-                                val showAct = if (showColorPickerRow) selectedHighlightColor != null else true
-                                Surface(
-                                    onClick = {
-                                        if (!showColorPickerRow) {
-                                            selectedVerses.clear()
-                                            showColorPickerRow = false
-                                            isDeleteMode = false
-                                        }
-                                    },
-                                    enabled = showAct,
-                                    shape = CircleShape,
-                                    color = if (showColorPickerRow) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.onBackground,
-                                    modifier = Modifier.size(44.dp)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            painter = painterResource(if (showColorPickerRow) R.drawable.ic_paintbrush else R.drawable.ic_close),
-                                            contentDescription = "Clear selection",
-                                            tint = if (showColorPickerRow) {
-                                                if (selectedHighlightColor != null) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
-                                            } else MaterialTheme.colorScheme.background,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            }
-        }
 
         // ── Translation picker overlay ────────────────────────────────────────
         if (showTranslationPicker) {

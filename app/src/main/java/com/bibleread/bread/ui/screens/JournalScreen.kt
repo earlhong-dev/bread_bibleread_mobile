@@ -280,8 +280,6 @@ fun ViewNoteScreen(
                 Icon(painterResource(R.drawable.ic_chevron_left), "Back",
                     tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
-            Text("Note", color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)) {
                 androidx.compose.animation.AnimatedVisibility(
                     visible = isEditMode,
@@ -419,8 +417,6 @@ fun NewNoteScreen(
                 Icon(painterResource(R.drawable.ic_chevron_left), "Back",
                     tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(22.dp))
             }
-            Text("New Note", color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             IconButton(onClick = { focusManager.clearFocus(); onSave(noteTitle.text.trim(), noteBody.text.trim()) },
                 modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)) {
                 Icon(painterResource(R.drawable.ic_save), "Save",
