@@ -15,6 +15,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlin.math.roundToInt
 import com.bibleread.bread.R
 import com.bibleread.bread.data.TranslationManager
 import com.bibleread.bread.viewmodel.BibleUiState
@@ -196,6 +198,14 @@ fun BibleScreen(
         vm.loadChapter(book, chapter, resetScroll = true)
     }
 
+    fun clearSelectedVerses(verseKeys: Set<String>) {
+        selectedVerses.removeAll(verseKeys)
+        if (selectedVerses.isEmpty()) {
+            showColorPickerRow = false
+            showSelectedVersesWindow = false
+        }
+    }
+
     LaunchedEffect(uiState) {
         if (uiState is BibleUiState.Success) {
             val verses = (uiState as BibleUiState.Success).verses
@@ -247,6 +257,8 @@ fun BibleScreen(
         getFontFamily(fontStyle, vm.customFonts)
     }
 
+    val density = LocalDensity.current
+
     val showChapterLabel by remember(listState, contentVisible) {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 && contentVisible
@@ -260,7 +272,10 @@ fun BibleScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
 
         Column(
             modifier = Modifier
@@ -467,8 +482,12 @@ fun BibleScreen(
                                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                             indication = null
                                         ) {
-                                            if (isSelected) selectedVerses.remove(verseKey)
-                                            else selectedVerses.add(verseKey)
+                                            if (isSelected) {
+                                                clearSelectedVerses(setOf(verseKey))
+                                            } else {
+                                                selectedVerses.add(verseKey)
+                                                showColorPickerRow = true
+                                            }
                                         }
                                         .padding(
                                             top = if (hasHeading) 16.dp else 0.dp,
@@ -584,6 +603,75 @@ fun BibleScreen(
             )
         }
 
+        // ── Compact color picker row (appears when verses selected) ───────────
+        AnimatedVisibility(
+            visible = showColorPickerRow,
+            enter = slideInVertically { it / 2 } + fadeIn(tween(180)),
+            exit = slideOutVertically { it / 2 } + fadeOut(tween(140)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LazyRow(
+                        state = colorListState,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(presetColors) { c ->
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(c, CircleShape)
+                                    .border(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f), CircleShape)
+                                    .clickable {
+                                        val verseKeys = selectedVerses.toSet()
+                                        vm.applyHighlight(verseKeys, c)
+                                        clearSelectedVerses(verseKeys)
+                                    }
+                            )
+                        }
+                        items(vm.customColors) { c ->
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(c, CircleShape)
+                                    .border(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f), CircleShape)
+                                    .clickable {
+                                        val verseKeys = selectedVerses.toSet()
+                                        vm.applyHighlight(verseKeys, c)
+                                        clearSelectedVerses(verseKeys)
+                                    }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    TextButton(onClick = {
+                        val verseKeys = selectedVerses.toSet()
+                        verseKeys.forEach { vm.removeHighlight(it) }
+                        clearSelectedVerses(verseKeys)
+                    }) {
+                        Text("Remove", color = MaterialTheme.colorScheme.onBackground)
+                    }
+
+                    TextButton(onClick = { showCustomColorPicker = true }) {
+                        Text("Custom", color = MaterialTheme.colorScheme.onBackground)
+                    }
+                }
+            }
+        }
+
         // ── Custom color picker popup ─────────────────────────────────────────
         AnimatedVisibility(
             visible = showCustomColorPicker,
@@ -595,12 +683,18 @@ fun BibleScreen(
                 initialHex = vm.lastCustomHex,
                 onHexChanged = { vm.saveLastCustomHex(it) },
                 onColorSelected = { color ->
+                    val verseKeys = selectedVerses.toSet()
+                    vm.applyHighlight(verseKeys, color)
                     vm.selectHighlightColor(color)
+                    clearSelectedVerses(verseKeys)
                     showCustomColorPicker = false
                 },
                 onColorAdded = { color ->
+                    val verseKeys = selectedVerses.toSet()
                     vm.addCustomColor(color)
                     vm.selectHighlightColor(color)
+                    vm.applyHighlight(verseKeys, color)
+                    clearSelectedVerses(verseKeys)
                     showCustomColorPicker = false
                     coroutineScope.launch {
                         // wait a bit for the row to recompose
@@ -689,6 +783,7 @@ fun BibleScreen(
             )
         }
     }
+
 }
 
 // ── Book Selection Overlay ────────────────────────────────────────────────────
@@ -1701,7 +1796,7 @@ fun CustomColorPickerPanel(
                         }
                     }
                     .pointerInput(Unit) {
-                        detectDragGestures { change, _ ->
+                        detectDragGestures { change: androidx.compose.ui.input.pointer.PointerInputChange, _: androidx.compose.ui.geometry.Offset ->
                             hue = (change.position.y / size.height * 360f).coerceIn(0f, 360f)
                             syncHex()
                         }
@@ -1758,7 +1853,7 @@ fun CustomColorPickerPanel(
                         }
                     }
                     .pointerInput(Unit) {
-                        detectDragGestures { change, _ ->
+                        detectDragGestures { change: androidx.compose.ui.input.pointer.PointerInputChange, _: androidx.compose.ui.geometry.Offset ->
                             saturation = (change.position.x / size.width).coerceIn(0f, 1f)
                             value  = (1f - change.position.y / size.height).coerceIn(0f, 1f)
                             syncHex()

@@ -165,7 +165,11 @@ fun MainApp(dbReady: State<Boolean>) {
         Scaffold(
             bottomBar = {
                 if (currentRoute != Screen.Splash.route && currentRoute != Screen.BookSelection.route && currentRoute != Screen.Appearance.route && currentRoute != Screen.NewNote.route && currentRoute != Screen.ViewNote.route) {
-                    Column(modifier = Modifier.navigationBarsPadding()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                    ) {
                         HorizontalDivider(
                             modifier = Modifier.fillMaxWidth(),
                             thickness = 0.5.dp,
@@ -176,7 +180,7 @@ fun MainApp(dbReady: State<Boolean>) {
                             contentColor = MaterialTheme.colorScheme.onSurface,
                             tonalElevation = 0.dp,
                             windowInsets = WindowInsets(0.dp),
-                            modifier = Modifier.fillMaxWidth().height(56.dp)
+                            modifier = Modifier.fillMaxWidth().height(55.dp)
                         ) {
                             items.forEach { screen ->
                                 NavigationBarItem(
@@ -185,7 +189,7 @@ fun MainApp(dbReady: State<Boolean>) {
                                             Icon(
                                                 painter = painterResource(id = it),
                                                 contentDescription = screen.label,
-                                                modifier = Modifier.size(28.dp)
+                                                modifier = Modifier.size(27.dp)
                                             )
                                         }
                                     },

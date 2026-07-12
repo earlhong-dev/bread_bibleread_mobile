@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.bibleread.bread.NoteCallbacks
 import com.bibleread.bread.R
 import org.json.JSONArray
@@ -258,7 +260,11 @@ fun ViewNoteScreen(
     var isEditMode by remember { mutableStateOf(false) }
     var editTitle by remember(note.id) { mutableStateOf(TextFieldValue(note.title)) }
     var editBody  by remember(note.id) { mutableStateOf(TextFieldValue(note.body)) }
-    var showMenu  by remember { mutableStateOf(false) }
+    var showActions by remember { mutableStateOf(false) }
+    var showStyleTools by remember { mutableStateOf(false) }
+    var isBold by remember { mutableStateOf(false) }
+    var isItalic by remember { mutableStateOf(false) }
+    var isUnderline by remember { mutableStateOf(false) }
 
     fun commitEdit() {
         val updated = note.copy(
@@ -354,40 +360,183 @@ fun ViewNoteScreen(
                 }
             }
 
-            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp).imePadding()) {
-                Box(
-                    modifier = Modifier.size(40.dp)
-                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f), CircleShape)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showMenu = true },
-                    contentAlignment = Alignment.Center
+            val actionContainerWidth by animateDpAsState(
+                targetValue = if (showActions) 112.dp else 40.dp,
+                animationSpec = tween(220), label = "actionContainerWidth"
+            )
+
+            Box(
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                    .imePadding()
+                    .fillMaxWidth()
+                    .height(40.dp)
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showStyleTools,
+                    enter = fadeIn(tween(180)),
+                    exit = fadeOut(tween(140)),
+                    modifier = Modifier.align(Alignment.BottomCenter).zIndex(1f)
                 ) {
-                    Icon(painterResource(R.drawable.ic_more_vertical), contentDescription = "More options",
-                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
-                    DropdownMenuItem(
-                        text = { Text("Share", color = MaterialTheme.colorScheme.onBackground) },
-                        leadingIcon = { Icon(painterResource(R.drawable.ic_share2_lucide), null,
-                            tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(18.dp)) },
-                        onClick = {
-                            showMenu = false
-                            val shareText = buildString {
-                                append(editTitle.text.trim())
-                                if (editBody.text.isNotBlank()) { append("\n\n"); append(editBody.text.trim()) }
+                    Box(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.background, RoundedCornerShape(20.dp))
+                            .padding(horizontal = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(end = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(onClick = { }) {
+                                    Text("Font Size", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                }
+                                TextButton(onClick = { }) {
+                                    Text("Font Style", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                }
+                                TextButton(onClick = { isBold = !isBold }) {
+                                    Text("Bold", color = if (isBold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                }
+                                TextButton(onClick = { isItalic = !isItalic }) {
+                                    Text("Italic", color = if (isItalic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                }
+                                TextButton(onClick = { isUnderline = !isUnderline }) {
+                                    Text("Underline", color = if (isUnderline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                }
                             }
-                            context.startActivity(Intent.createChooser(
-                                Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) },
-                                "Share note"
-                            ))
+
+                            Spacer(modifier = Modifier.width(4.dp))
+
+                            IconButton(
+                                onClick = { showStyleTools = false },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_x_lucide),
+                                    contentDescription = "Close style tools",
+                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete", color = Color.Red) },
-                        leadingIcon = { Icon(painterResource(R.drawable.ic_trash_lucide), null,
-                            tint = Color.Red, modifier = Modifier.size(18.dp)) },
-                        onClick = { showMenu = false; onDelete() }
-                    )
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(
+                            onClick = { /* Attach */ },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_file_plus_corner),
+                                contentDescription = "Attach",
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { showStyleTools = !showStyleTools },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_a_large_small),
+                                contentDescription = "Style",
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier.height(40.dp).width(actionContainerWidth)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 6.dp)
+                    ) {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showActions,
+                            modifier = Modifier.align(Alignment.CenterStart).padding(end = 4.dp),
+                            enter = fadeIn(animationSpec = tween(180)),
+                            exit = fadeOut(animationSpec = tween(140))
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        showActions = false
+                                        val shareText = buildString {
+                                            append(editTitle.text.trim())
+                                            if (editBody.text.isNotBlank()) { append("\n\n"); append(editBody.text.trim()) }
+                                        }
+                                        context.startActivity(Intent.createChooser(
+                                            Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) },
+                                            "Share note"
+                                        ))
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_share2_lucide), contentDescription = "Share",
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
+                                }
+                                IconButton(
+                                    onClick = {
+                                        showActions = false
+                                        onDelete()
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(painterResource(R.drawable.ic_trash_lucide), contentDescription = "Delete",
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier.align(Alignment.CenterEnd).size(28.dp)
+                        ) {
+                            IconButton(
+                                onClick = { showActions = !showActions },
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = showActions,
+                                        enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
+                                        exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_x_lucide),
+                                            contentDescription = "Close actions",
+                                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = !showActions,
+                                        enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
+                                        exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_more_vertical),
+                                            contentDescription = "More options",
+                                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
