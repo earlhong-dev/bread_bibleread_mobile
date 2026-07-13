@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -274,6 +275,108 @@ private fun NoteCard(note: NoteEntry, onClick: () -> Unit) {
     }
 }
 
+@Composable
+private fun NoteBodyEditor(
+    editBody: TextFieldValue,
+    onBodyChange: (TextFieldValue) -> Unit,
+    isEditMode: Boolean,
+    onEditModeChange: (Boolean) -> Unit,
+    currentFontSize: String,
+    onCurrentFontSizeChange: (String) -> Unit,
+    lineFontSizes: Map<Int, String>,
+    onLineFontSizesChange: (Map<Int, String>) -> Unit,
+    bodyTextColor: Color,
+    bodyFocusRequester: FocusRequester,
+    activeCursor: SolidColor,
+    hiddenCursor: SolidColor,
+    modifier: Modifier = Modifier
+) {
+    fun getCurrentLineNumber(text: String = editBody.text, offset: Int = editBody.selection.start): Int {
+        val safeOffset = offset.coerceIn(0, text.length)
+        return text.substring(0, safeOffset).count { it == '\n' }
+    }
+
+    fun getFontSizeForLine(lineNumber: Int): String = lineFontSizes[lineNumber] ?: "Aa"
+
+    fun getFontSizeForLabel(label: String): TextUnit = when (label) {
+        "H1" -> 24.sp
+        "H2" -> 20.sp
+        else -> 16.sp
+    }
+
+    fun buildStyledBodyText(text: String): AnnotatedString {
+        val lines = text.split("\n")
+        return buildAnnotatedString {
+            lines.forEachIndexed { lineIndex, lineText ->
+                val label = lineFontSizes[lineIndex] ?: currentFontSize
+                val fontSize = getFontSizeForLabel(label)
+                withStyle(
+                    SpanStyle(
+                        color = bodyTextColor,
+                        fontSize = fontSize,
+                        fontFamily = FontFamily.Default
+                    )
+                ) {
+                    append(lineText)
+                }
+                if (lineIndex < lines.size - 1) append("\n")
+            }
+        }
+    }
+
+    fun syncCurrentLineFontSize(text: String, selection: TextRange) {
+        val lineNumber = getCurrentLineNumber(text, selection.start)
+        onCurrentFontSizeChange(getFontSizeForLine(lineNumber))
+    }
+
+    BasicTextField(
+        value = editBody,
+        onValueChange = { newValue ->
+            val oldLineCount = editBody.text.count { it == '\n' } + 1
+            val newLineCount = newValue.text.count { it == '\n' } + 1
+            val cursorPos = newValue.selection.start
+            val currentLineNum = getCurrentLineNumber(newValue.text, cursorPos)
+
+            if (newLineCount > oldLineCount) {
+                val previousLine = getCurrentLineNumber(editBody.text, editBody.selection.start)
+                val newMap = lineFontSizes.toMutableMap()
+                newMap[previousLine] = currentFontSize
+                newMap[currentLineNum] = "Aa"
+                onLineFontSizesChange(newMap)
+                onCurrentFontSizeChange("Aa")
+            }
+
+            syncCurrentLineFontSize(newValue.text, newValue.selection)
+            onBodyChange(newValue)
+            if (!isEditMode) onEditModeChange(true)
+        },
+        modifier = modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp).focusRequester(bodyFocusRequester),
+        textStyle = TextStyle(
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 16.sp,
+            fontFamily = FontFamily.Default,
+            lineHeight = 26.sp
+        ),
+        cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        visualTransformation = { annotatedString ->
+            val styledText = buildStyledBodyText(annotatedString.text)
+            TransformedText(styledText, OffsetMapping.Identity)
+        },
+        decorationBox = { inner ->
+            if (editBody.text.isEmpty() && isEditMode) {
+                Text(
+                    "Start writing...",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                    fontSize = 16.sp,
+                    lineHeight = 26.sp
+                )
+            }
+            inner()
+        }
+    )
+}
+
 // ── View / Edit Note Screen ───────────────────────────────────────────────────
 @Composable
 fun ViewNoteScreen(
@@ -420,51 +523,21 @@ fun ViewNoteScreen(
                     Spacer(Modifier.height(16.dp))
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f))
                     Spacer(Modifier.height(16.dp))
-                    Box(modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp)) {
-                        if (editBody.text.isEmpty() && isEditMode) {
-                            Text(
-                                "Start writing...",
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-                                fontSize = 16.sp,
-                                lineHeight = 26.sp,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        } else {
-                            Text(
-                                text = buildStyledBodyText(editBody.text, bodyTextColor),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        BasicTextField(
-                            value = editBody,
-                            onValueChange = { newValue ->
-                                val oldLineCount = editBody.text.count { it == '\n' } + 1
-                                val newLineCount = newValue.text.count { it == '\n' } + 1
-                                val cursorPos = newValue.selection.start
-                                val currentLineNum = getCurrentLineNumber(newValue.text, cursorPos)
-
-                                if (newLineCount > oldLineCount) {
-                                    val newMap = lineFontSizes.toMutableMap()
-                                    newMap[currentLineNum] = currentFontSize
-                                    lineFontSizes = newMap
-                                }
-
-                                syncCurrentLineFontSize(newValue.text, newValue.selection)
-                                editBody = newValue
-                                if (!isEditMode) isEditMode = true
-                            },
-                            modifier = Modifier.fillMaxWidth().focusRequester(bodyFocusRequester),
-                            textStyle = TextStyle(
-                                color = Color.Transparent,
-                                fontSize = 16.sp,
-                                fontFamily = FontFamily.Default,
-                                lineHeight = 26.sp
-                            ),
-                            cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
-                        )
-                    }
+                    NoteBodyEditor(
+                        editBody = editBody,
+                        onBodyChange = { newValue -> editBody = newValue },
+                        isEditMode = isEditMode,
+                        onEditModeChange = { enabled -> isEditMode = enabled },
+                        currentFontSize = currentFontSize,
+                        onCurrentFontSizeChange = { size -> currentFontSize = size },
+                        lineFontSizes = lineFontSizes,
+                        onLineFontSizesChange = { sizes -> lineFontSizes = sizes },
+                        bodyTextColor = bodyTextColor,
+                        bodyFocusRequester = bodyFocusRequester,
+                        activeCursor = activeCursor,
+                        hiddenCursor = hiddenCursor,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp)
+                    )
                 }
             }
 
