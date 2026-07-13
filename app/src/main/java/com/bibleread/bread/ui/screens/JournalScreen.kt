@@ -36,11 +36,17 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,7 +65,8 @@ data class NoteEntry(
     val id: Long,
     val title: String,
     val body: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val fontSizesJson: String = ""
 )
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -72,7 +79,13 @@ private fun loadNotes(context: Context): List<NoteEntry> {
         val arr = JSONArray(json)
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
-            NoteEntry(o.getLong("id"), o.getString("title"), o.getString("body"), o.getLong("timestamp"))
+            NoteEntry(
+                o.getLong("id"),
+                o.getString("title"),
+                o.getString("body"),
+                o.getLong("timestamp"),
+                o.optString("font_sizes_json", "")
+            )
         }
     } catch (e: Exception) {
         android.util.Log.w("JournalScreen", "notes JSON corrupted, resetting: ${e.message}")
@@ -86,6 +99,7 @@ private fun saveNotes(context: Context, notes: List<NoteEntry>) {
         arr.put(JSONObject().apply {
             put("id", n.id); put("title", n.title)
             put("body", n.body); put("timestamp", n.timestamp)
+            put("font_sizes_json", n.fontSizesJson)
         })
     }
     context.getSharedPreferences("journal_notes", Context.MODE_PRIVATE)
@@ -94,6 +108,22 @@ private fun saveNotes(context: Context, notes: List<NoteEntry>) {
 
 private fun formatDate(ts: Long): String =
     SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()).format(Date(ts))
+
+private fun lineFontSizesToJson(lineFontSizes: Map<Int, String>): String {
+    val obj = JSONObject()
+    lineFontSizes.forEach { (line, size) -> obj.put(line.toString(), size) }
+    return obj.toString()
+}
+
+private fun parseLineFontSizes(json: String?): Map<Int, String> {
+    if (json.isNullOrBlank()) return emptyMap()
+    return try {
+        val obj = JSONObject(json)
+        obj.keys().asSequence().associate { key -> key.toInt() to obj.getString(key) }
+    } catch (_: Exception) {
+        emptyMap()
+    }
+}
 
 // ── Journal Screen ────────────────────────────────────────────────────────────
 @Composable
@@ -265,12 +295,71 @@ fun ViewNoteScreen(
     var isBold by remember { mutableStateOf(false) }
     var isItalic by remember { mutableStateOf(false) }
     var isUnderline by remember { mutableStateOf(false) }
+    var currentFontSize by remember { mutableStateOf("Aa") } // "H1", "H2", or "Aa" (default)
+    var lineFontSizes by remember(note.id) { mutableStateOf(parseLineFontSizes(note.fontSizesJson)) }
+    var bodyRenderVersion by remember { mutableStateOf(0) }
+    
+    fun getFontSizeForLine(lineNumber: Int): String = lineFontSizes[lineNumber] ?: "Aa"
+
+    fun getCurrentLineNumber(text: String = editBody.text, offset: Int = editBody.selection.start): Int {
+        val safeOffset = offset.coerceIn(0, text.length)
+        return text.substring(0, safeOffset).count { it == '\n' }
+    }
+    
+    fun buildStyledText(text: String): AnnotatedString {
+        val lines = text.split("\n")
+        return buildAnnotatedString {
+            lines.forEachIndexed { lineIndex, lineText ->
+                val lineSize = getFontSizeForLine(lineIndex)
+                val size = when (lineSize) {
+                    "H1" -> 24.sp
+                    "H2" -> 20.sp
+                    else -> 16.sp
+                }
+                withStyle(SpanStyle(fontSize = size)) {
+                    append(lineText)
+                }
+                if (lineIndex < lines.size - 1) append("\n")
+            }
+        }
+    }
+
+    fun saveLineFont(fontSize: String, lineNumber: Int) {
+        val newMap = lineFontSizes.toMutableMap()
+        newMap[lineNumber] = fontSize
+        lineFontSizes = newMap
+        bodyRenderVersion += 1
+    }
+    
+    fun applyFontSizeToCurrentLine(fontSize: String) {
+        val currentLine = getCurrentLineNumber(editBody.text, editBody.selection.start)
+        currentFontSize = fontSize
+        if (currentLine >= 0) {
+            saveLineFont(fontSize, currentLine)
+        }
+        bodyFocusRequester.requestFocus()
+    }
+    
+    fun saveCurrentLineFont(fontSize: String = currentFontSize) {
+        applyFontSizeToCurrentLine(fontSize)
+    }
+    
+    fun resetFontSizeForNewLine() {
+        // Save the current line's font size first
+        saveCurrentLineFont()
+        // Reset for new line
+        currentFontSize = "Aa"
+    }
+    
+    fun getStyledBodyText(): AnnotatedString = buildStyledText(editBody.text)
 
     fun commitEdit() {
+        saveCurrentLineFont()
         val updated = note.copy(
             title = editTitle.text.trim().ifBlank { "Untitled" },
             body  = editBody.text.trim().take(MAX_NOTE_BODY_LENGTH),
-            timestamp = note.timestamp
+            timestamp = note.timestamp,
+            fontSizesJson = lineFontSizesToJson(lineFontSizes)
         )
         focusManager.clearFocus()
         isEditMode = false
@@ -309,6 +398,11 @@ fun ViewNoteScreen(
                 handleColor = MaterialTheme.colorScheme.onBackground,
                 backgroundColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
             )
+            val bodySize = when (currentFontSize) {
+                "H1" -> 24.sp
+                "H2" -> 20.sp
+                else -> 16.sp // "Aa" default
+            }
             val titleStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 24.sp, fontWeight = FontWeight.Bold,
@@ -316,7 +410,7 @@ fun ViewNoteScreen(
             )
             val bodyStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 16.sp, fontFamily = FontFamily.Default, lineHeight = 26.sp
+                fontSize = bodySize, fontFamily = FontFamily.Default, lineHeight = (bodySize.value * 1.625f).sp
             )
 
             CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
@@ -342,21 +436,45 @@ fun ViewNoteScreen(
                     Spacer(Modifier.height(16.dp))
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f))
                     Spacer(Modifier.height(16.dp))
-                    BasicTextField(
-                        value = editBody,
-                        onValueChange = { editBody = it; if (!isEditMode) isEditMode = true },
-                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp).focusRequester(bodyFocusRequester),
-                        textStyle = bodyStyle,
-                        cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        decorationBox = { inner ->
-                            if (editBody.text.isEmpty() && isEditMode) {
-                                Text("Start writing...", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-                                    fontSize = 16.sp, lineHeight = 26.sp)
+                    key(bodyRenderVersion) {
+                        BasicTextField(
+                            value = editBody,
+                            onValueChange = { newValue ->
+                                val oldLineCount = editBody.text.count { it == '\n' } + 1
+                                val newLineCount = newValue.text.count { it == '\n' } + 1
+                                val cursorPos = newValue.selection.start
+                                val currentLineNum = getCurrentLineNumber(newValue.text, cursorPos)
+                                if (newLineCount > oldLineCount) {
+                                    saveLineFont(currentFontSize, currentLineNum - 1)
+                                    currentFontSize = "Aa"
+                                } else {
+                                    currentFontSize = getFontSizeForLine(currentLineNum)
+                                }
+                                editBody = newValue
+                                if (!isEditMode) isEditMode = true
+                            },
+                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp).focusRequester(bodyFocusRequester),
+                            textStyle = TextStyle(
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontSize = 16.sp,
+                                fontFamily = FontFamily.Default,
+                                lineHeight = 26.sp
+                            ),
+                            cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                            visualTransformation = { annotatedString ->
+                                val styledText = buildStyledText(annotatedString.text)
+                                TransformedText(styledText, OffsetMapping.Identity)
+                            },
+                            decorationBox = { inner ->
+                                if (editBody.text.isEmpty() && isEditMode) {
+                                    Text("Start writing...", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                                        fontSize = 16.sp, lineHeight = 26.sp)
+                                }
+                                inner()
                             }
-                            inner()
-                        }
-                    )
+                        )
+                    }
                 }
             }
 
@@ -395,9 +513,26 @@ fun ViewNoteScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                TextButton(onClick = { }) {
-                                    Text("Font Size", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                TextButton(onClick = { 
+                                    applyFontSizeToCurrentLine("H1")
+                                }) {
+                                    Text("H1", color = if (currentFontSize == "H1") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
+                                TextButton(onClick = { 
+                                    applyFontSizeToCurrentLine("H2")
+                                }) {
+                                    Text("H2", color = if (currentFontSize == "H2") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                }
+                                TextButton(onClick = { 
+                                    applyFontSizeToCurrentLine("Aa")
+                                }) {
+                                    Text("Aa", color = if (currentFontSize == "Aa") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                }
+                                VerticalDivider(
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
+                                    modifier = Modifier.height(24.dp)
+                                )
                                 TextButton(onClick = { }) {
                                     Text("Font Style", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
