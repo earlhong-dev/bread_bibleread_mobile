@@ -11,10 +11,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.shape.CircleShape
@@ -57,6 +55,7 @@ import com.bibleread.bread.NoteCallbacks
 import com.bibleread.bread.R
 import org.json.JSONArray
 import org.json.JSONObject
+import androidx.core.content.edit
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -104,7 +103,7 @@ private fun saveNotes(context: Context, notes: List<NoteEntry>) {
         })
     }
     context.getSharedPreferences("journal_notes", Context.MODE_PRIVATE)
-        .edit().putString("notes", arr.toString()).apply()
+        .edit { putString("notes", arr.toString()) }
 }
 
 private fun formatDate(ts: Long): String =
@@ -179,7 +178,7 @@ fun JournalScreen(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 if (isEditing) {
                     val t = tempTitle.text.trim().ifEmpty { "Journal" }
-                    journalTitle = t; prefs.edit().putString("journal_title", t).apply()
+                    journalTitle = t; prefs.edit { putString("journal_title", t) }
                     isEditing = false; focusManager.clearFocus()
                 }
             }
@@ -197,7 +196,7 @@ fun JournalScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(modifier = Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                    AnimatedVisibility(visible = isCustomTitle,
+                    androidx.compose.animation.AnimatedVisibility(visible = isCustomTitle,
                         enter = fadeIn(animationSpec = tween(300)) + slideInVertically(initialOffsetY = { -it / 2 }, animationSpec = tween(350)),
                         exit  = fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { -it / 2 }, animationSpec = tween(250))
                     ) {
@@ -215,7 +214,7 @@ fun JournalScreen(
                             singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = {
                                 val t = tempTitle.text.trim().ifEmpty { "Journal" }
-                                journalTitle = t; prefs.edit().putString("journal_title", t).apply()
+                                journalTitle = t; prefs.edit { putString("journal_title", t) }
                                 isEditing = false; focusManager.clearFocus()
                             }))
                     } else { Text(journalTitle, style = titleStyle) }
@@ -308,7 +307,7 @@ private fun NoteBodyEditor(
         val lines = text.split("\n")
         return buildAnnotatedString {
             lines.forEachIndexed { lineIndex, lineText ->
-                val label = lineFontSizes[lineIndex] ?: currentFontSize
+                val label = lineFontSizes[lineIndex] ?: "Aa"
                 val fontSize = getFontSizeForLabel(label)
                 withStyle(
                     SpanStyle(
@@ -402,40 +401,15 @@ fun ViewNoteScreen(
     val bodyTextColor = MaterialTheme.colorScheme.onBackground
     var lineFontSizes by remember(note.id) { mutableStateOf(parseLineFontSizes(note.fontSizesJson)) }
     
-    fun getFontSizeForLine(lineNumber: Int): String = lineFontSizes[lineNumber] ?: "Aa"
-
     fun getCurrentLineNumber(text: String = editBody.text, offset: Int = editBody.selection.start): Int {
         val safeOffset = offset.coerceIn(0, text.length)
         return text.substring(0, safeOffset).count { it == '\n' }
     }
-    
-    fun getFontSizeForLabel(label: String): androidx.compose.ui.unit.TextUnit = when (label) {
-        "H1" -> 24.sp
-        "H2" -> 20.sp
-        else -> 16.sp
-    }
 
-    fun buildStyledBodyText(text: String, textColor: Color): AnnotatedString {
-        val lines = text.split("\n")
-        return buildAnnotatedString {
-            lines.forEachIndexed { lineIndex, lineText ->
-                val label = lineFontSizes[lineIndex] ?: currentFontSize
-                val fontSize = getFontSizeForLabel(label)
-                withStyle(
-                    SpanStyle(
-                        color = textColor,
-                        fontSize = fontSize,
-                        fontFamily = FontFamily.Default
-                    )
-                ) {
-                    append(lineText)
-                }
-                if (lineIndex < lines.size - 1) append("\n")
-            }
-        }
-    }
 
-    fun applyBodyFontSize(label: String, size: androidx.compose.ui.unit.TextUnit) {
+    // buildStyledBodyText moved to NoteBodyEditor; this helper was unused and removed to reduce warnings.
+
+    fun applyBodyFontSize(label: String) {
         currentFontSize = label
         val currentLine = getCurrentLineNumber(editBody.text, editBody.selection.start)
         if (currentLine >= 0) {
@@ -446,10 +420,7 @@ fun ViewNoteScreen(
         editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
     }
 
-    fun syncCurrentLineFontSize(text: String, selection: TextRange) {
-        val lineNumber = getCurrentLineNumber(text, selection.start)
-        currentFontSize = getFontSizeForLine(lineNumber)
-    }
+    // syncCurrentLineFontSize was previously unused here; kept logic inside NoteBodyEditor where needed.
     
     fun commitEdit() {
         val updated = note.copy(
@@ -577,21 +548,21 @@ fun ViewNoteScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 TextButton(onClick = {
-                                    applyBodyFontSize("H1", 24.sp)
+                                    applyBodyFontSize("H1")
                                     editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
                                     bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("H1", color = if (currentFontSize == "H1") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
                                 TextButton(onClick = {
-                                    applyBodyFontSize("H2", 20.sp)
+                                    applyBodyFontSize("H2")
                                     editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
                                     bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("H2", color = if (currentFontSize == "H2") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
                                 TextButton(onClick = {
-                                    applyBodyFontSize("Aa", 16.sp)
+                                    applyBodyFontSize("Aa")
                                     editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
                                     bodyFocusRequester.requestFocus()
                                 }) {
@@ -713,7 +684,7 @@ fun ViewNoteScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    androidx.compose.animation.AnimatedVisibility(
+                                        androidx.compose.animation.AnimatedVisibility(
                                         visible = showActions,
                                         enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
                                         exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
