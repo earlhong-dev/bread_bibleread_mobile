@@ -296,8 +296,8 @@ fun ViewNoteScreen(
     var isItalic by remember { mutableStateOf(false) }
     var isUnderline by remember { mutableStateOf(false) }
     var currentFontSize by remember { mutableStateOf("Aa") } // "H1", "H2", or "Aa" (default)
+    val bodyTextColor = MaterialTheme.colorScheme.onBackground
     var lineFontSizes by remember(note.id) { mutableStateOf(parseLineFontSizes(note.fontSizesJson)) }
-    var bodyRenderVersion by remember { mutableStateOf(0) }
     
     fun getFontSizeForLine(lineNumber: Int): String = lineFontSizes[lineNumber] ?: "Aa"
 
@@ -306,17 +306,25 @@ fun ViewNoteScreen(
         return text.substring(0, safeOffset).count { it == '\n' }
     }
     
-    fun buildStyledText(text: String): AnnotatedString {
+    fun getFontSizeForLabel(label: String): androidx.compose.ui.unit.TextUnit = when (label) {
+        "H1" -> 24.sp
+        "H2" -> 20.sp
+        else -> 16.sp
+    }
+
+    fun buildStyledBodyText(text: String, textColor: Color): AnnotatedString {
         val lines = text.split("\n")
         return buildAnnotatedString {
             lines.forEachIndexed { lineIndex, lineText ->
-                val lineSize = getFontSizeForLine(lineIndex)
-                val size = when (lineSize) {
-                    "H1" -> 24.sp
-                    "H2" -> 20.sp
-                    else -> 16.sp
-                }
-                withStyle(SpanStyle(fontSize = size)) {
+                val label = lineFontSizes[lineIndex] ?: currentFontSize
+                val fontSize = getFontSizeForLabel(label)
+                withStyle(
+                    SpanStyle(
+                        color = textColor,
+                        fontSize = fontSize,
+                        fontFamily = FontFamily.Default
+                    )
+                ) {
                     append(lineText)
                 }
                 if (lineIndex < lines.size - 1) append("\n")
@@ -324,37 +332,23 @@ fun ViewNoteScreen(
         }
     }
 
-    fun saveLineFont(fontSize: String, lineNumber: Int) {
-        val newMap = lineFontSizes.toMutableMap()
-        newMap[lineNumber] = fontSize
-        lineFontSizes = newMap
-        bodyRenderVersion += 1
-    }
-    
-    fun applyFontSizeToCurrentLine(fontSize: String) {
+    fun applyBodyFontSize(label: String, size: androidx.compose.ui.unit.TextUnit) {
+        currentFontSize = label
         val currentLine = getCurrentLineNumber(editBody.text, editBody.selection.start)
-        currentFontSize = fontSize
         if (currentLine >= 0) {
-            saveLineFont(fontSize, currentLine)
+            val newMap = lineFontSizes.toMutableMap()
+            newMap[currentLine] = label
+            lineFontSizes = newMap
         }
-        bodyFocusRequester.requestFocus()
+        editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
     }
-    
-    fun saveCurrentLineFont(fontSize: String = currentFontSize) {
-        applyFontSizeToCurrentLine(fontSize)
-    }
-    
-    fun resetFontSizeForNewLine() {
-        // Save the current line's font size first
-        saveCurrentLineFont()
-        // Reset for new line
-        currentFontSize = "Aa"
-    }
-    
-    fun getStyledBodyText(): AnnotatedString = buildStyledText(editBody.text)
 
+    fun syncCurrentLineFontSize(text: String, selection: TextRange) {
+        val lineNumber = getCurrentLineNumber(text, selection.start)
+        currentFontSize = getFontSizeForLine(lineNumber)
+    }
+    
     fun commitEdit() {
-        saveCurrentLineFont()
         val updated = note.copy(
             title = editTitle.text.trim().ifBlank { "Untitled" },
             body  = editBody.text.trim().take(MAX_NOTE_BODY_LENGTH),
@@ -398,21 +392,11 @@ fun ViewNoteScreen(
                 handleColor = MaterialTheme.colorScheme.onBackground,
                 backgroundColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
             )
-            val bodySize = when (currentFontSize) {
-                "H1" -> 24.sp
-                "H2" -> 20.sp
-                else -> 16.sp // "Aa" default
-            }
             val titleStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 24.sp, fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Default, lineHeight = 32.sp
             )
-            val bodyStyle = TextStyle(
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = bodySize, fontFamily = FontFamily.Default, lineHeight = (bodySize.value * 1.625f).sp
-            )
-
             CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
                 Column(
                     modifier = Modifier
@@ -436,7 +420,22 @@ fun ViewNoteScreen(
                     Spacer(Modifier.height(16.dp))
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f))
                     Spacer(Modifier.height(16.dp))
-                    key(bodyRenderVersion) {
+                    Box(modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp)) {
+                        if (editBody.text.isEmpty() && isEditMode) {
+                            Text(
+                                "Start writing...",
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                                fontSize = 16.sp,
+                                lineHeight = 26.sp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Text(
+                                text = buildStyledBodyText(editBody.text, bodyTextColor),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
                         BasicTextField(
                             value = editBody,
                             onValueChange = { newValue ->
@@ -444,35 +443,26 @@ fun ViewNoteScreen(
                                 val newLineCount = newValue.text.count { it == '\n' } + 1
                                 val cursorPos = newValue.selection.start
                                 val currentLineNum = getCurrentLineNumber(newValue.text, cursorPos)
+
                                 if (newLineCount > oldLineCount) {
-                                    saveLineFont(currentFontSize, currentLineNum - 1)
-                                    currentFontSize = "Aa"
-                                } else {
-                                    currentFontSize = getFontSizeForLine(currentLineNum)
+                                    val newMap = lineFontSizes.toMutableMap()
+                                    newMap[currentLineNum] = currentFontSize
+                                    lineFontSizes = newMap
                                 }
+
+                                syncCurrentLineFontSize(newValue.text, newValue.selection)
                                 editBody = newValue
                                 if (!isEditMode) isEditMode = true
                             },
-                            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp).focusRequester(bodyFocusRequester),
+                            modifier = Modifier.fillMaxWidth().focusRequester(bodyFocusRequester),
                             textStyle = TextStyle(
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = Color.Transparent,
                                 fontSize = 16.sp,
                                 fontFamily = FontFamily.Default,
                                 lineHeight = 26.sp
                             ),
                             cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                            visualTransformation = { annotatedString ->
-                                val styledText = buildStyledText(annotatedString.text)
-                                TransformedText(styledText, OffsetMapping.Identity)
-                            },
-                            decorationBox = { inner ->
-                                if (editBody.text.isEmpty() && isEditMode) {
-                                    Text("Start writing...", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-                                        fontSize = 16.sp, lineHeight = 26.sp)
-                                }
-                                inner()
-                            }
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
                         )
                     }
                 }
@@ -513,18 +503,24 @@ fun ViewNoteScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                TextButton(onClick = { 
-                                    applyFontSizeToCurrentLine("H1")
+                                TextButton(onClick = {
+                                    applyBodyFontSize("H1", 24.sp)
+                                    editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
+                                    bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("H1", color = if (currentFontSize == "H1") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
-                                TextButton(onClick = { 
-                                    applyFontSizeToCurrentLine("H2")
+                                TextButton(onClick = {
+                                    applyBodyFontSize("H2", 20.sp)
+                                    editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
+                                    bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("H2", color = if (currentFontSize == "H2") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
-                                TextButton(onClick = { 
-                                    applyFontSizeToCurrentLine("Aa")
+                                TextButton(onClick = {
+                                    applyBodyFontSize("Aa", 16.sp)
+                                    editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
+                                    bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("Aa", color = if (currentFontSize == "Aa") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
