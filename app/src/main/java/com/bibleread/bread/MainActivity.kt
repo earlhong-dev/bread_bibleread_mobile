@@ -261,7 +261,6 @@ fun MainApp(dbReady: State<Boolean>) {
                     }
                     composable(Screen.BookSelection.route) {
                         BookSelectionOverlay(
-                            books = BIBLE_BOOKS.keys.toList(),
                             onBookSelected = { book, chapter ->
                                 bookSelectionCallback?.invoke(book, chapter)
                                 bookSelectionCallback = null

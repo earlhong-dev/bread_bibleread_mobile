@@ -13,7 +13,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
@@ -60,11 +59,12 @@ import com.bibleread.bread.R
 import com.bibleread.bread.data.TranslationManager
 import com.bibleread.bread.viewmodel.BibleUiState
 import com.bibleread.bread.viewmodel.BibleViewModel
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.text.font.Font
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.toColorInt
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -108,47 +108,21 @@ fun getFontFamily(styleName: String, customFontFiles: List<File> = emptyList()):
     }
 }
 
-val BOOK_ABBREVIATIONS = mapOf(
-    "Genesis" to "GEN", "Exodo" to "EXO", "Levitico" to "LEV", "Mga Bilang" to "BIL",
-    "Deuteronomio" to "DEU", "Josue" to "JOS", "Mga Hukom" to "HUK", "Ruth" to "RUTH",
-    "1 Samuel" to "1 SAM", "2 Samuel" to "2 SAM", "1 Mga Hari" to "1 HARI", "2 Mga Hari" to "2 HARI",
-    "1 Mga Cronica" to "1 CRON", "2 Mga Cronica" to "2 CRON", "Ezra" to "EZRA", "Nehemias" to "NEH",
-    "Ester" to "EST", "Job" to "JOB", "Mga Awit" to "AWIT", "Mga Kawikaan" to "KAWI",
-    "Ang Mangangaral" to "MANG", "Ang Awit ni Solomon" to "SOLO", "Isaias" to "ISA", "Jeremias" to "JER",
-    "Mga Panaghoy" to "PANAG", "Ezekiel" to "EZEK", "Daniel" to "DAN", "Hosea" to "HOS",
-    "Joel" to "JOEL", "Amos" to "AMOS", "Obadias" to "OBA", "Jonas" to "JON", "Mikas" to "MIK",
-    "Nahum" to "NAH", "Habakuk" to "HAB", "Zefanias" to "ZEF", "Hagai" to "HAG",
-    "Zacarias" to "ZAC", "Malakias" to "MAL", "Mateo" to "MAT", "Marcos" to "MAR",
-    "Lucas" to "LUC", "Juan" to "JUAN", "Mga Gawa" to "GAWA", "Mga Taga-Roma" to "ROMA",
-    "1 Mga Taga-Corinto" to "1 COR", "2 Mga Taga-Corinto" to "2 COR", "Mga Taga-Galacia" to "GAL",
-    "Mga Taga-Efeso" to "EFE", "Mga Taga-Filipos" to "FILI", "Mga Taga-Colosas" to "COL",
-    "1 Mga Taga-Tesalonica" to "1 TESA", "2 Mga Taga-Tesalonica" to "2 TESA", "1 Timoteo" to "1 TIM",
-    "2 Timoteo" to "2 TIM", "Tito" to "TITO", "Filemon" to "FILE", "Mga Hebreo" to "HEB",
-    "Santiago" to "SAN", "1 Pedro" to "1 PED", "2 Pedro" to "2 PED", "1 Juan" to "1 JUAN",
-    "2 Juan" to "2 JUAN", "3 Juan" to "3 JUAN", "Judas" to "JUD", "Pahayag" to "PAHA"
-)
-
-fun getBookAbbreviation(bookName: String): String =
-    BOOK_ABBREVIATIONS[bookName] ?: bookName.take(4).uppercase()
-
-
 @Composable
 fun BibleScreen(
     vm: BibleViewModel = viewModel(),
     onOpenBookSelection: ((String, Int) -> Unit) -> Unit = {},
     onOpenAppearance: () -> Unit = {}
 ) {
-    val books = BIBLE_BOOKS.keys.toList()
-
-    var selectedBook by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(vm.lastBook) }
-    var targetChapter by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(vm.lastChapter) }
+    var selectedBook by rememberSaveable { mutableStateOf(vm.lastBook) }
+    var targetChapter by rememberSaveable { mutableIntStateOf(vm.lastChapter) }
 
     val fontSize = vm.fontSize
     val fontStyle = vm.fontStyle
-    var showTranslationPicker by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    var showSelectedVersesWindow by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    val selectedVerses = androidx.compose.runtime.saveable.rememberSaveable(
-        saver = androidx.compose.runtime.saveable.listSaver(
+    var showTranslationPicker by rememberSaveable { mutableStateOf(false) }
+    var showSelectedVersesWindow by rememberSaveable { mutableStateOf(false) }
+    val selectedVerses = rememberSaveable(
+        saver = listSaver(
             save = { it.toList() },
             restore = { 
                 val set = mutableStateSetOf<String>()
@@ -158,18 +132,16 @@ fun BibleScreen(
         )
     ) { mutableStateSetOf<String>() }
 
-    val selectedHighlightColor by vm.selectedHighlightColor
-    var showColorPickerRow by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    var showCustomColorPicker by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    var isDeleteMode by remember { mutableStateOf(false) }
+    var showColorPickerRow by rememberSaveable { mutableStateOf(false) }
+    var showCustomColorPicker by rememberSaveable { mutableStateOf(false) }
 
     val highlights = vm.highlights
 
     val uiState by vm.uiState.collectAsState()
     val activeTranslation by vm.activeTranslation.collectAsState()
     val listState = rememberLazyListState()
-    val colorListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val colorListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     val presetColors = remember {
         listOf(
@@ -256,8 +228,6 @@ fun BibleScreen(
     val currentFontFamily = remember(fontStyle, vm.customFonts) {
         getFontFamily(fontStyle, vm.customFonts)
     }
-
-    val density = LocalDensity.current
 
     val showChapterLabel by remember(listState, contentVisible) {
         derivedStateOf {
@@ -378,10 +348,9 @@ fun BibleScreen(
                     val versesByChapter = state.verses.groupBy { it.chapter }
 
                     // Reset color picker row when selection is cleared
-                    LaunchedEffect(selectedVerses.size) {
+                            LaunchedEffect(selectedVerses.size) {
                         if (selectedVerses.isEmpty()) {
                             showColorPickerRow = false
-                            isDeleteMode = false
                             showSelectedVersesWindow = false
                         }
                     }
@@ -556,19 +525,6 @@ fun BibleScreen(
                             item { Spacer(modifier = Modifier.height(24.dp)) }
                         }
                     }
-                }
-            }
-
-            val showStickyChapter by remember(listState) {
-                derivedStateOf {
-                    listState.firstVisibleItemIndex > 0
-                }
-            }
-
-            var displayedStickyChapter by remember { mutableIntStateOf(targetChapter) }
-            LaunchedEffect(showStickyChapter, targetChapter, contentVisible) {
-                if (showStickyChapter && contentVisible) {
-                    displayedStickyChapter = targetChapter
                 }
             }
 
@@ -807,7 +763,6 @@ private val NEW_TESTAMENT = listOf(
 
 @Composable
 fun BookSelectionOverlay(
-    books: List<String>,
     activeTranslationName: String = "",
     onTranslationClick: () -> Unit = {},
     onBookSelected: (String, Int) -> Unit,
@@ -1630,8 +1585,8 @@ fun CustomColorPickerPanel(
 ) {
     val initialColor = remember(initialHex) { 
         try {
-            android.graphics.Color.parseColor("#$initialHex")
-        } catch (e: Exception) {
+            "#$initialHex".toColorInt()
+        } catch (_: Exception) {
             android.graphics.Color.RED
         }
     }
@@ -1642,9 +1597,9 @@ fun CustomColorPickerPanel(
         hsvOut
     }
 
-    var hue by remember { mutableStateOf(initialHsv[0]) }
-    var saturation by remember { mutableStateOf(initialHsv[1]) }
-    var value by remember { mutableStateOf(initialHsv[2]) }
+    var hue by remember { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember { mutableFloatStateOf(initialHsv[1]) }
+    var value by remember { mutableFloatStateOf(initialHsv[2]) }
     var hexInput by remember { mutableStateOf(initialHex) }
     var hexError by remember { mutableStateOf(false) }
 
@@ -1703,7 +1658,7 @@ fun CustomColorPickerPanel(
                     onHexChanged(clean)
                     if (clean.length == 6) {
                         try {
-                            val parsed = android.graphics.Color.parseColor("#$clean")
+                            val parsed = "#$clean".toColorInt()
                             val hsvOut = FloatArray(3)
                             android.graphics.Color.colorToHSV(parsed, hsvOut)
                             if (hsvOut[1] > 0f) {
@@ -1712,7 +1667,7 @@ fun CustomColorPickerPanel(
                             saturation = hsvOut[1]
                             value = hsvOut[2]
                             hexError = false
-                        } catch (e: Exception) { hexError = true }
+                        } catch (_: Exception) { hexError = true }
                     }
                 },
                 singleLine = true,

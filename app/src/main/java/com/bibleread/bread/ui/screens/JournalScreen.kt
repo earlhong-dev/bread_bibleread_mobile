@@ -466,11 +466,6 @@ fun ViewNoteScreen(
                 handleColor = MaterialTheme.colorScheme.onBackground,
                 backgroundColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
             )
-            val titleStyle = TextStyle(
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 24.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Default, lineHeight = 32.sp
-            )
             CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
                 Column(
                     modifier = Modifier
@@ -485,7 +480,11 @@ fun ViewNoteScreen(
                         value = editTitle,
                         onValueChange = { editTitle = it; if (!isEditMode) isEditMode = true },
                         modifier = Modifier.fillMaxWidth().focusRequester(titleFocusRequester),
-                        textStyle = titleStyle,
+                        textStyle = TextStyle(
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Default, lineHeight = 32.sp
+                        ),
                         cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next),
@@ -684,7 +683,7 @@ fun ViewNoteScreen(
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                        androidx.compose.animation.AnimatedVisibility(
+                                    androidx.compose.animation.AnimatedVisibility(
                                         visible = showActions,
                                         enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
                                         exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
