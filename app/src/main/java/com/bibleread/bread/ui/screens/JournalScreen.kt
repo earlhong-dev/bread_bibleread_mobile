@@ -38,6 +38,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -46,6 +47,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -66,8 +68,331 @@ data class NoteEntry(
     val title: String,
     val body: String,
     val timestamp: Long,
-    val fontSizesJson: String = ""
+    val fontSizesJson: String = "", // Line-level font sizes
+    val charStylesJson: String = "" // Character-level bold/italic/underline
 )
+
+// Line formatting that sticks to content, not position
+private data class LineFormatData(
+    val contentHash: String, // Hash of the line content to identify it
+    val fontSize: String = "Aa",
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val underline: Boolean = false
+)
+
+// Character-level style tracking
+private data class CharacterStyles(
+    val charIndex: Int,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val underline: Boolean = false
+)
+
+private enum class TextStyleFlag { BOLD, ITALIC, UNDERLINE }
+
+// Apply style to selected character range
+private fun applyStyleToRange(
+    text: String,
+    selection: TextRange,
+    existingStyles: Map<Int, CharacterStyles>,
+    flag: TextStyleFlag,
+    enabled: Boolean
+): Map<Int, CharacterStyles> {
+    val result = existingStyles.toMutableMap()
+    val start = selection.start.coerceIn(0, text.length)
+    val end = selection.end.coerceIn(0, text.length)
+    
+    if (start == end) return result // No selection
+    
+    for (i in start until end) {
+        val currentStyle = result[i] ?: CharacterStyles(i)
+        result[i] = when (flag) {
+            TextStyleFlag.BOLD -> currentStyle.copy(bold = enabled)
+            TextStyleFlag.ITALIC -> currentStyle.copy(italic = enabled)
+            TextStyleFlag.UNDERLINE -> currentStyle.copy(underline = enabled)
+        }
+    }
+    
+    return result
+}
+
+// Update character styles when text is edited (insert/delete)
+private fun updateCharacterStylesForEdit(
+    oldText: String,
+    newText: String,
+    oldStyles: Map<Int, CharacterStyles>
+): Map<Int, CharacterStyles> {
+    if (oldText == newText) return oldStyles
+    
+    val result = mutableMapOf<Int, CharacterStyles>()
+    
+    // Find the common prefix
+    val prefixLength = oldText.zip(newText).takeWhile { it.first == it.second }.count()
+    
+    // Find the common suffix
+    val suffixLength = oldText.drop(prefixLength).reversed()
+        .zip(newText.drop(prefixLength).reversed())
+        .takeWhile { it.first == it.second }.count()
+    
+    val oldEditStart = prefixLength
+    val oldEditEnd = oldText.length - suffixLength
+    val newEditStart = prefixLength
+    val newEditEnd = newText.length - suffixLength
+    
+    val charsDeleted = oldEditEnd - oldEditStart
+    val charsInserted = newEditEnd - newEditStart
+    
+    // Copy styles before edit point
+    for (i in 0 until oldEditStart) {
+        oldStyles[i]?.let { result[i] = it.copy(charIndex = i) }
+    }
+    
+    // For inserted characters, inherit style from character at cursor position
+    if (charsInserted > 0 && oldEditStart > 0) {
+        val inheritStyle = oldStyles[oldEditStart - 1]
+        if (inheritStyle != null) {
+            for (i in newEditStart until newEditEnd) {
+                result[i] = inheritStyle.copy(charIndex = i)
+            }
+        }
+    }
+    
+    // Copy styles after edit point (shifted by the difference)
+    for (i in oldEditEnd until oldText.length) {
+        oldStyles[i]?.let { 
+            val newIndex = i - charsDeleted + charsInserted
+            if (newIndex >= 0 && newIndex < newText.length) {
+                result[newIndex] = it.copy(charIndex = newIndex)
+            }
+        }
+    }
+    
+    return result
+}
+
+// Serialize character styles to JSON
+private fun characterStylesToJson(styles: Map<Int, CharacterStyles>): String {
+    val array = JSONArray()
+    styles.values.forEach { style ->
+        array.put(JSONObject().apply {
+            put("index", style.charIndex)
+            put("bold", style.bold)
+            put("italic", style.italic)
+            put("underline", style.underline)
+        })
+    }
+    return array.toString()
+}
+
+// Deserialize character styles from JSON
+private fun jsonToCharacterStyles(json: String?): Map<Int, CharacterStyles> {
+    if (json.isNullOrBlank()) return emptyMap()
+    return try {
+        val result = mutableMapOf<Int, CharacterStyles>()
+        val array = JSONArray(json)
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val style = CharacterStyles(
+                charIndex = obj.getInt("index"),
+                bold = obj.optBoolean("bold", false),
+                italic = obj.optBoolean("italic", false),
+                underline = obj.optBoolean("underline", false)
+            )
+            result[style.charIndex] = style
+        }
+        result
+    } catch (_: Exception) {
+        emptyMap()
+    }
+}
+
+// Create a stable hash from line content
+private fun hashLineContent(text: String, lineIndex: Int = -1): String {
+    val key = text.take(50).trim()
+    // For empty lines, use position-based identifier when available
+    return if (key.isEmpty() && lineIndex >= 0) {
+        "empty_line_$lineIndex"
+    } else if (key.isEmpty()) {
+        "empty_line_${System.nanoTime()}"
+    } else {
+        key
+    }
+}
+
+// Update format map when text changes
+private fun updateFormatMapForEdit(
+    oldText: String,
+    newText: String,
+    oldFormatMap: Map<String, LineFormatData>
+): Map<String, LineFormatData> {
+    val oldLines = oldText.split("\n")
+    val newLines = newText.split("\n")
+    val result = mutableMapOf<String, LineFormatData>()
+    
+    // Detect if Enter was pressed (line count increased)
+    val enterPressed = newLines.size > oldLines.size
+    val linesDeleted = newLines.size < oldLines.size
+    
+    if (enterPressed) {
+        // Enter was pressed - need to handle line splitting intelligently
+        newLines.forEachIndexed { index, newLine ->
+            val hash = hashLineContent(newLine, index)
+            
+            // Check if this exact content existed before (unchanged line)
+            val existingFormat = if (newLine.trim().isEmpty()) {
+                // Empty line - check if there was a format at this position
+                val oldHash = hashLineContent("", index)
+                oldFormatMap[oldHash]
+            } else {
+                // Non-empty line - match by content
+                oldFormatMap.entries.find { it.key == newLine.take(50).trim() }?.value
+            }
+            
+            if (existingFormat != null) {
+                // Line existed before with this exact content
+                result[hash] = existingFormat.copy(contentHash = hash)
+            } else {
+                // New or split line - check if it came from splitting an existing line
+                var foundSplitSource = false
+                
+                // Check if this line's content is a substring of any old line (line was split)
+                oldLines.forEachIndexed { oldIndex, oldLine ->
+                    if (!foundSplitSource && oldLine.contains(newLine) && newLine.isNotEmpty()) {
+                        // This new line was part of an old line - inherit that format
+                        val oldFormat = oldFormatMap.entries.find { 
+                            it.key == oldLine.take(50).trim() 
+                        }?.value
+                        
+                        if (oldFormat != null) {
+                            result[hash] = oldFormat.copy(contentHash = hash)
+                            foundSplitSource = true
+                        }
+                    }
+                }
+                
+                if (!foundSplitSource) {
+                    // Truly new line - use default format
+                    result[hash] = LineFormatData(contentHash = hash, fontSize = "Aa")
+                }
+            }
+        }
+    } else if (linesDeleted) {
+        // Lines were merged - inherit format from the FIRST line involved in the merge
+        newLines.forEachIndexed { index, newLine ->
+            val newHash = hashLineContent(newLine, index)
+            
+            // Check if exact content match exists
+            val exactMatch = oldFormatMap.entries.find { 
+                it.key == newLine.take(50).trim()
+            }?.value
+            
+            if (exactMatch != null) {
+                result[newHash] = exactMatch.copy(contentHash = newHash)
+            } else {
+                // This line is likely a merged line
+                // Find the first old line at this position - it should provide the format
+                val firstOldLine = oldLines.getOrNull(index) ?: ""
+                val firstOldFormat = oldFormatMap.entries.find { 
+                    it.key == firstOldLine.take(50).trim() 
+                }?.value
+                
+                if (firstOldFormat != null) {
+                    // Merged line inherits from first line (the H1 in your example)
+                    result[newHash] = firstOldFormat.copy(contentHash = newHash)
+                } else {
+                    // Fallback to default
+                    result[newHash] = LineFormatData(contentHash = newHash, fontSize = "Aa")
+                }
+            }
+        }
+    } else {
+        // Same line count - normal editing (typing/deleting within a line)
+        newLines.forEachIndexed { index, newLine ->
+            val newHash = hashLineContent(newLine, index)
+            
+            // Check if this exact line content already has format
+            val existingByContent = oldFormatMap.entries.find { 
+                it.key == newLine.take(50).trim() || (newLine.trim().isEmpty() && it.key.startsWith("empty_line_"))
+            }?.value
+            
+            if (existingByContent != null) {
+                result[newHash] = existingByContent.copy(contentHash = newHash)
+            } else {
+                // Line was edited - try to inherit from old line at same position
+                val oldLine = oldLines.getOrNull(index) ?: ""
+                if (oldLine.isNotEmpty() && newLine.isNotEmpty()) {
+                    val oldHash = hashLineContent(oldLine, index)
+                    val oldFormat = oldFormatMap.entries.find { 
+                        it.key == oldLine.take(50).trim() 
+                    }?.value
+                    
+                    if (oldFormat != null) {
+                        // Check if this is truly an edit of the same line (similar content)
+                        val oldKey = oldLine.take(30).trim()
+                        val newKey = newLine.take(30).trim()
+                        
+                        // Only inherit if there's clear overlap (you're editing the same line)
+                        if (oldKey.isNotEmpty() && newKey.isNotEmpty()) {
+                            if (newKey.contains(oldKey.take(10)) || oldKey.contains(newKey.take(10))) {
+                                result[newHash] = oldFormat.copy(contentHash = newHash)
+                            }
+                        }
+                    }
+                }
+                
+                // If still no format, save with default
+                if (!result.containsKey(newHash)) {
+                    result[newHash] = LineFormatData(contentHash = newHash, fontSize = "Aa")
+                }
+            }
+        }
+    }
+    
+    return result
+}
+
+// Convert format map to JSON
+private fun formatMapToJson(formatMap: Map<String, LineFormatData>): String {
+    val obj = JSONObject()
+    formatMap.forEach { (hash, format) ->
+        obj.put(hash, JSONObject().apply {
+            put("font_size", format.fontSize)
+            put("bold", format.bold)
+            put("italic", format.italic)
+            put("underline", format.underline)
+        })
+    }
+    return obj.toString()
+}
+
+// Parse JSON to format map
+private fun jsonToFormatMap(json: String?): Map<String, LineFormatData> {
+    if (json.isNullOrBlank()) return emptyMap()
+    return try {
+        val result = mutableMapOf<String, LineFormatData>()
+        val obj = JSONObject(json)
+        obj.keys().forEach { hash ->
+            val formatObj = obj.getJSONObject(hash)
+            result[hash] = LineFormatData(
+                contentHash = hash,
+                fontSize = formatObj.optString("font_size", "Aa"),
+                bold = formatObj.optBoolean("bold", false),
+                italic = formatObj.optBoolean("italic", false),
+                underline = formatObj.optBoolean("underline", false)
+            )
+        }
+        result
+    } catch (_: Exception) {
+        emptyMap()
+    }
+}
+
+// Get format for a line by its content
+private fun getFormatForLine(lineText: String, formatMap: Map<String, LineFormatData>): LineFormatData {
+    val hash = hashLineContent(lineText)
+    return formatMap[hash] ?: LineFormatData(contentHash = hash)
+}
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 private const val MAX_NOTE_BODY_LENGTH = 50_000
@@ -84,7 +409,8 @@ private fun loadNotes(context: Context): List<NoteEntry> {
                 o.getString("title"),
                 o.getString("body"),
                 o.getLong("timestamp"),
-                o.optString("font_sizes_json", "")
+                o.optString("font_sizes_json", ""),
+                o.optString("char_styles_json", "")
             )
         }
     } catch (e: Exception) {
@@ -100,6 +426,7 @@ private fun saveNotes(context: Context, notes: List<NoteEntry>) {
             put("id", n.id); put("title", n.title)
             put("body", n.body); put("timestamp", n.timestamp)
             put("font_sizes_json", n.fontSizesJson)
+            put("char_styles_json", n.charStylesJson)
         })
     }
     context.getSharedPreferences("journal_notes", Context.MODE_PRIVATE)
@@ -123,6 +450,11 @@ private fun parseLineFontSizes(json: String?): Map<Int, String> {
     } catch (_: Exception) {
         emptyMap()
     }
+}
+
+// Line format persistence - uses line IDs and content matching
+private fun saveNoteWithLineObjects(context: Context, notes: List<NoteEntry>) {
+    saveNotes(context, notes)
 }
 
 // ── Journal Screen ────────────────────────────────────────────────────────────
@@ -278,24 +610,26 @@ private fun NoteCard(note: NoteEntry, onClick: () -> Unit) {
 private fun NoteBodyEditor(
     editBody: TextFieldValue,
     onBodyChange: (TextFieldValue) -> Unit,
+    formatMap: Map<String, LineFormatData>,
+    onFormatMapChange: (Map<String, LineFormatData>) -> Unit,
+    characterStyles: Map<Int, CharacterStyles>,
+    onCharacterStylesChange: (Map<Int, CharacterStyles>) -> Unit,
+    currentLineIndex: Int,
+    onCurrentLineIndexChange: (Int) -> Unit,
     isEditMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
-    currentFontSize: String,
-    onCurrentFontSizeChange: (String) -> Unit,
-    lineFontSizes: Map<Int, String>,
-    onLineFontSizesChange: (Map<Int, String>) -> Unit,
     bodyTextColor: Color,
     bodyFocusRequester: FocusRequester,
     activeCursor: SolidColor,
     hiddenCursor: SolidColor,
     modifier: Modifier = Modifier
 ) {
-    fun getCurrentLineNumber(text: String = editBody.text, offset: Int = editBody.selection.start): Int {
+    var previousText by remember { mutableStateOf(editBody.text) }
+    
+    fun getCursorLineIndex(text: String, offset: Int): Int {
         val safeOffset = offset.coerceIn(0, text.length)
         return text.substring(0, safeOffset).count { it == '\n' }
     }
-
-    fun getFontSizeForLine(lineNumber: Int): String = lineFontSizes[lineNumber] ?: "Aa"
 
     fun getFontSizeForLabel(label: String): TextUnit = when (label) {
         "H1" -> 24.sp
@@ -303,49 +637,69 @@ private fun NoteBodyEditor(
         else -> 16.sp
     }
 
-    fun buildStyledBodyText(text: String): AnnotatedString {
+    fun buildStyledBodyText(text: String, formats: Map<String, LineFormatData>, charStyles: Map<Int, CharacterStyles>): AnnotatedString {
         val lines = text.split("\n")
+        
         return buildAnnotatedString {
+            var charIndex = 0
+            
             lines.forEachIndexed { lineIndex, lineText ->
-                val label = lineFontSizes[lineIndex] ?: "Aa"
-                val fontSize = getFontSizeForLabel(label)
-                withStyle(
-                    SpanStyle(
+                val hash = hashLineContent(lineText, lineIndex)
+                val lineFormat = formats[hash] ?: LineFormatData(contentHash = hash, fontSize = "Aa")
+                val fontSize = getFontSizeForLabel(lineFormat.fontSize)
+                
+                // Apply styles character by character
+                lineText.forEachIndexed { charInLine, char ->
+                    val globalCharIndex = charIndex + charInLine
+                    val charStyle = charStyles[globalCharIndex]
+                    
+                    val spanStyle = SpanStyle(
+                        color = bodyTextColor,
+                        fontSize = fontSize,
+                        fontFamily = FontFamily.Default,
+                        fontWeight = if (charStyle?.bold == true) FontWeight.Bold else null,
+                        fontStyle = if (charStyle?.italic == true) FontStyle.Italic else null,
+                        textDecoration = if (charStyle?.underline == true) TextDecoration.Underline else null
+                    )
+
+                    withStyle(spanStyle) {
+                        append(char.toString())
+                    }
+                }
+                
+                charIndex += lineText.length
+                
+                // Add newline between lines (except after last line)
+                if (lineIndex < lines.lastIndex) {
+                    val spanStyle = SpanStyle(
                         color = bodyTextColor,
                         fontSize = fontSize,
                         fontFamily = FontFamily.Default
                     )
-                ) {
-                    append(lineText)
+                    withStyle(spanStyle) {
+                        append("\n")
+                    }
+                    charIndex += 1 // for the newline character
                 }
-                if (lineIndex < lines.size - 1) append("\n")
             }
         }
-    }
-
-    fun syncCurrentLineFontSize(text: String, selection: TextRange) {
-        val lineNumber = getCurrentLineNumber(text, selection.start)
-        onCurrentFontSizeChange(getFontSizeForLine(lineNumber))
     }
 
     BasicTextField(
         value = editBody,
         onValueChange = { newValue ->
-            val oldLineCount = editBody.text.count { it == '\n' } + 1
-            val newLineCount = newValue.text.count { it == '\n' } + 1
-            val cursorPos = newValue.selection.start
-            val currentLineNum = getCurrentLineNumber(newValue.text, cursorPos)
-
-            if (newLineCount > oldLineCount) {
-                val previousLine = getCurrentLineNumber(editBody.text, editBody.selection.start)
-                val newMap = lineFontSizes.toMutableMap()
-                newMap[previousLine] = currentFontSize
-                newMap[currentLineNum] = "Aa"
-                onLineFontSizesChange(newMap)
-                onCurrentFontSizeChange("Aa")
-            }
-
-            syncCurrentLineFontSize(newValue.text, newValue.selection)
+            // Update format map to track line changes
+            val updatedFormatMap = updateFormatMapForEdit(previousText, newValue.text, formatMap)
+            onFormatMapChange(updatedFormatMap)
+            
+            // Update character styles to track character changes
+            val updatedCharStyles = updateCharacterStylesForEdit(previousText, newValue.text, characterStyles)
+            onCharacterStylesChange(updatedCharStyles)
+            
+            previousText = newValue.text
+            
+            val newLineIndex = getCursorLineIndex(newValue.text, newValue.selection.start)
+            onCurrentLineIndexChange(newLineIndex)
             onBodyChange(newValue)
             if (!isEditMode) onEditModeChange(true)
         },
@@ -359,7 +713,7 @@ private fun NoteBodyEditor(
         cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
         visualTransformation = { annotatedString ->
-            val styledText = buildStyledBodyText(annotatedString.text)
+            val styledText = buildStyledBodyText(annotatedString.text, formatMap, characterStyles)
             TransformedText(styledText, OffsetMapping.Identity)
         },
         decorationBox = { inner ->
@@ -374,6 +728,11 @@ private fun NoteBodyEditor(
             inner()
         }
     )
+    
+    // Initialize previousText
+    LaunchedEffect(Unit) {
+        previousText = editBody.text
+    }
 }
 
 // ── View / Edit Note Screen ───────────────────────────────────────────────────
@@ -391,43 +750,120 @@ fun ViewNoteScreen(
 
     var isEditMode by remember { mutableStateOf(false) }
     var editTitle by remember(note.id) { mutableStateOf(TextFieldValue(note.title)) }
-    var editBody  by remember(note.id) { mutableStateOf(TextFieldValue(note.body)) }
+    var editBody by remember(note.id) { mutableStateOf(TextFieldValue(note.body)) }
+    
+    // Format map: line-level font sizes
+    var formatMap by remember(note.id) { 
+        mutableStateOf(jsonToFormatMap(note.fontSizesJson))
+    }
+    
+    // Character styles: character-level bold/italic/underline
+    var characterStyles by remember(note.id) {
+        mutableStateOf(jsonToCharacterStyles(note.charStylesJson))
+    }
+    
+    var currentLineIndex by remember { mutableStateOf(0) }
     var showActions by remember { mutableStateOf(false) }
     var showStyleTools by remember { mutableStateOf(false) }
-    var isBold by remember { mutableStateOf(false) }
-    var isItalic by remember { mutableStateOf(false) }
-    var isUnderline by remember { mutableStateOf(false) }
-    var currentFontSize by remember { mutableStateOf("Aa") } // "H1", "H2", or "Aa" (default)
     val bodyTextColor = MaterialTheme.colorScheme.onBackground
-    var lineFontSizes by remember(note.id) { mutableStateOf(parseLineFontSizes(note.fontSizesJson)) }
     
-    fun getCurrentLineNumber(text: String = editBody.text, offset: Int = editBody.selection.start): Int {
-        val safeOffset = offset.coerceIn(0, text.length)
-        return text.substring(0, safeOffset).count { it == '\n' }
+    fun getCurrentLineText(): String {
+        val lines = editBody.text.split("\n")
+        return lines.getOrNull(currentLineIndex) ?: ""
     }
-
-
-    // buildStyledBodyText moved to NoteBodyEditor; this helper was unused and removed to reduce warnings.
+    
+    // Current line's font size for UI
+    val currentLineText = getCurrentLineText()
+    val currentLineHash = hashLineContent(currentLineText, currentLineIndex)
+    val currentFormat = formatMap[currentLineHash] ?: LineFormatData(contentHash = currentLineHash)
+    
+    var currentFontSize by remember(currentLineIndex, editBody.text, formatMap) { 
+        mutableStateOf(currentFormat.fontSize)
+    }
+    
+    // Character styles based on selection
+    fun getSelectionStyles(): CharacterStyles? {
+        val start = editBody.selection.start
+        val end = editBody.selection.end
+        if (start == end) {
+            // No selection - check character before cursor
+            return if (start > 0) characterStyles[start - 1] else null
+        }
+        // Has selection - check if all selected characters have same style
+        val selectedStyles = (start until end).mapNotNull { characterStyles[it] }
+        if (selectedStyles.isEmpty()) return null
+        
+        val allBold = selectedStyles.all { it.bold }
+        val allItalic = selectedStyles.all { it.italic }
+        val allUnderline = selectedStyles.all { it.underline }
+        
+        return CharacterStyles(0, allBold, allItalic, allUnderline)
+    }
+    
+    val selectionStyles = getSelectionStyles()
+    var isBold by remember(editBody.selection, characterStyles) { 
+        mutableStateOf(selectionStyles?.bold ?: false)
+    }
+    var isItalic by remember(editBody.selection, characterStyles) { 
+        mutableStateOf(selectionStyles?.italic ?: false)
+    }
+    var isUnderline by remember(editBody.selection, characterStyles) { 
+        mutableStateOf(selectionStyles?.underline ?: false)
+    }
 
     fun applyBodyFontSize(label: String) {
+        val lineText = getCurrentLineText()
+        val hash = hashLineContent(lineText, currentLineIndex)
+        val updatedFormat = (formatMap[hash] ?: LineFormatData(contentHash = hash)).copy(
+            fontSize = label,
+            contentHash = hash
+        )
+        formatMap = formatMap + (hash to updatedFormat)
         currentFontSize = label
-        val currentLine = getCurrentLineNumber(editBody.text, editBody.selection.start)
-        if (currentLine >= 0) {
-            val newMap = lineFontSizes.toMutableMap()
-            newMap[currentLine] = label
-            lineFontSizes = newMap
-        }
-        editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
     }
 
-    // syncCurrentLineFontSize was previously unused here; kept logic inside NoteBodyEditor where needed.
+    fun applyCharacterStyle(flag: TextStyleFlag, enabled: Boolean) {
+        if (!isEditMode) isEditMode = true
+        val updatedStyles = applyStyleToRange(
+            editBody.text,
+            editBody.selection,
+            characterStyles,
+            flag,
+            enabled
+        )
+        characterStyles = updatedStyles
+        
+        when (flag) {
+            TextStyleFlag.BOLD -> isBold = enabled
+            TextStyleFlag.ITALIC -> isItalic = enabled
+            TextStyleFlag.UNDERLINE -> isUnderline = enabled
+        }
+        bodyFocusRequester.requestFocus()
+    }
+
+    fun syncStyleButtonState() {
+        val lineText = getCurrentLineText()
+        val hash = hashLineContent(lineText, currentLineIndex)
+        val format = formatMap[hash] ?: LineFormatData(contentHash = hash)
+        currentFontSize = format.fontSize
+        
+        val styles = getSelectionStyles()
+        isBold = styles?.bold ?: false
+        isItalic = styles?.italic ?: false
+        isUnderline = styles?.underline ?: false
+    }
+
+    LaunchedEffect(currentLineIndex, editBody.text, editBody.selection, formatMap, characterStyles) {
+        syncStyleButtonState()
+    }
     
     fun commitEdit() {
         val updated = note.copy(
             title = editTitle.text.trim().ifBlank { "Untitled" },
-            body  = editBody.text.trim().take(MAX_NOTE_BODY_LENGTH),
+            body  = editBody.text.take(MAX_NOTE_BODY_LENGTH), // Don't trim - preserves empty lines
             timestamp = note.timestamp,
-            fontSizesJson = lineFontSizesToJson(lineFontSizes)
+            fontSizesJson = formatMapToJson(formatMap),
+            charStylesJson = characterStylesToJson(characterStyles)
         )
         focusManager.clearFocus()
         isEditMode = false
@@ -495,13 +931,24 @@ fun ViewNoteScreen(
                     Spacer(Modifier.height(16.dp))
                     NoteBodyEditor(
                         editBody = editBody,
-                        onBodyChange = { newValue -> editBody = newValue },
+                        onBodyChange = { newValue ->
+                            editBody = newValue
+                        },
+                        formatMap = formatMap,
+                        onFormatMapChange = { newMap ->
+                            formatMap = newMap
+                        },
+                        characterStyles = characterStyles,
+                        onCharacterStylesChange = { newStyles ->
+                            characterStyles = newStyles
+                        },
+                        currentLineIndex = currentLineIndex,
+                        onCurrentLineIndexChange = { index ->
+                            currentLineIndex = index
+                            syncStyleButtonState()
+                        },
                         isEditMode = isEditMode,
                         onEditModeChange = { enabled -> isEditMode = enabled },
-                        currentFontSize = currentFontSize,
-                        onCurrentFontSizeChange = { size -> currentFontSize = size },
-                        lineFontSizes = lineFontSizes,
-                        onLineFontSizesChange = { sizes -> lineFontSizes = sizes },
                         bodyTextColor = bodyTextColor,
                         bodyFocusRequester = bodyFocusRequester,
                         activeCursor = activeCursor,
@@ -548,21 +995,18 @@ fun ViewNoteScreen(
                             ) {
                                 TextButton(onClick = {
                                     applyBodyFontSize("H1")
-                                    editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
                                     bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("H1", color = if (currentFontSize == "H1") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
                                 TextButton(onClick = {
                                     applyBodyFontSize("H2")
-                                    editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
                                     bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("H2", color = if (currentFontSize == "H2") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
                                 }
                                 TextButton(onClick = {
                                     applyBodyFontSize("Aa")
-                                    editBody = editBody.copy(text = editBody.text, selection = editBody.selection)
                                     bodyFocusRequester.requestFocus()
                                 }) {
                                     Text("Aa", color = if (currentFontSize == "Aa") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
@@ -572,17 +1016,42 @@ fun ViewNoteScreen(
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
                                     modifier = Modifier.height(24.dp)
                                 )
-                                TextButton(onClick = { }) {
-                                    Text("Font Style", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                TextButton(onClick = {
+                                    val nextValue = !isBold
+                                    isBold = nextValue
+                                    applyCharacterStyle(TextStyleFlag.BOLD, nextValue)
+                                }) {
+                                    Text(
+                                        "B",
+                                        color = if (isBold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
                                 }
-                                TextButton(onClick = { isBold = !isBold }) {
-                                    Text("Bold", color = if (isBold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                TextButton(onClick = {
+                                    val nextValue = !isItalic
+                                    isItalic = nextValue
+                                    applyCharacterStyle(TextStyleFlag.ITALIC, nextValue)
+                                }) {
+                                    Text(
+                                        "I",
+                                        color = if (isItalic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                                        fontStyle = FontStyle.Italic,
+                                        fontFamily = FontFamily.Serif,
+                                        fontSize = 16.sp
+                                    )
                                 }
-                                TextButton(onClick = { isItalic = !isItalic }) {
-                                    Text("Italic", color = if (isItalic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
-                                }
-                                TextButton(onClick = { isUnderline = !isUnderline }) {
-                                    Text("Underline", color = if (isUnderline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                TextButton(onClick = {
+                                    val nextValue = !isUnderline
+                                    isUnderline = nextValue
+                                    applyCharacterStyle(TextStyleFlag.UNDERLINE, nextValue)
+                                }) {
+                                    Text(
+                                        "U",
+                                        color = if (isUnderline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                                        textDecoration = TextDecoration.Underline,
+                                        fontSize = 16.sp
+                                    )
                                 }
                             }
 
