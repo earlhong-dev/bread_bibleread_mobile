@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextRange
@@ -963,228 +964,252 @@ fun ViewNoteScreen(
                 animationSpec = tween(220), label = "actionContainerWidth"
             )
 
+            // ── Bottom Overlays Container (moves up with keyboard) ────────────────
+            val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+            val offsetY = if (isKeyboardVisible) 16.dp else 0.dp
+            
             Box(
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-                    .imePadding()
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(40.dp)
+                    .imePadding()
+                    .offset(y = offsetY) // Only offset when keyboard is visible
             ) {
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showStyleTools,
-                    enter = fadeIn(tween(180)),
-                    exit = fadeOut(tween(140)),
-                    modifier = Modifier.align(Alignment.BottomCenter).zIndex(1f)
+                // Yellow Container at very bottom with all UI
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .zIndex(10f),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.background, RoundedCornerShape(20.dp))
-                            .padding(horizontal = 8.dp)
+                    // Style tools panel (appears on top when visible)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showStyleTools,
+                        enter = fadeIn(tween(180)),
+                        exit = fadeOut(tween(140)),
+                        modifier = Modifier.align(Alignment.Center).zIndex(21f)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                        Box(
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.background, RoundedCornerShape(20.dp))
+                                .padding(horizontal = 8.dp)
                         ) {
                             Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(end = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                TextButton(onClick = {
-                                    applyBodyFontSize("H1")
-                                    bodyFocusRequester.requestFocus()
-                                }) {
-                                    Text("H1", color = if (currentFontSize == "H1") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
-                                }
-                                TextButton(onClick = {
-                                    applyBodyFontSize("H2")
-                                    bodyFocusRequester.requestFocus()
-                                }) {
-                                    Text("H2", color = if (currentFontSize == "H2") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
-                                }
-                                TextButton(onClick = {
-                                    applyBodyFontSize("Aa")
-                                    bodyFocusRequester.requestFocus()
-                                }) {
-                                    Text("Aa", color = if (currentFontSize == "Aa") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
-                                }
-                                VerticalDivider(
-                                    thickness = 0.5.dp,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
-                                    modifier = Modifier.height(24.dp)
-                                )
-                                TextButton(onClick = {
-                                    val nextValue = !isBold
-                                    isBold = nextValue
-                                    applyCharacterStyle(TextStyleFlag.BOLD, nextValue)
-                                }) {
-                                    Text(
-                                        "B",
-                                        color = if (isBold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(end = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(onClick = {
+                                        applyBodyFontSize("H1")
+                                        bodyFocusRequester.requestFocus()
+                                    }) {
+                                        Text("H1", color = if (currentFontSize == "H1") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                    }
+                                    TextButton(onClick = {
+                                        applyBodyFontSize("H2")
+                                        bodyFocusRequester.requestFocus()
+                                    }) {
+                                        Text("H2", color = if (currentFontSize == "H2") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                    }
+                                    TextButton(onClick = {
+                                        applyBodyFontSize("Aa")
+                                        bodyFocusRequester.requestFocus()
+                                    }) {
+                                        Text("Aa", color = if (currentFontSize == "Aa") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f))
+                                    }
+                                    VerticalDivider(
+                                        thickness = 0.5.dp,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
+                                        modifier = Modifier.height(24.dp)
                                     )
+                                    TextButton(onClick = {
+                                        val nextValue = !isBold
+                                        isBold = nextValue
+                                        applyCharacterStyle(TextStyleFlag.BOLD, nextValue)
+                                    }) {
+                                        Text(
+                                            "B",
+                                            color = if (isBold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        val nextValue = !isItalic
+                                        isItalic = nextValue
+                                        applyCharacterStyle(TextStyleFlag.ITALIC, nextValue)
+                                    }) {
+                                        Text(
+                                            "I",
+                                            color = if (isItalic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                                            fontStyle = FontStyle.Italic,
+                                            fontFamily = FontFamily.Serif,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        val nextValue = !isUnderline
+                                        isUnderline = nextValue
+                                        applyCharacterStyle(TextStyleFlag.UNDERLINE, nextValue)
+                                    }) {
+                                        Text(
+                                            "U",
+                                            color = if (isUnderline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+                                            textDecoration = TextDecoration.Underline,
+                                            fontSize = 16.sp
+                                        )
+                                    }
                                 }
-                                TextButton(onClick = {
-                                    val nextValue = !isItalic
-                                    isItalic = nextValue
-                                    applyCharacterStyle(TextStyleFlag.ITALIC, nextValue)
-                                }) {
-                                    Text(
-                                        "I",
-                                        color = if (isItalic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                                        fontStyle = FontStyle.Italic,
-                                        fontFamily = FontFamily.Serif,
-                                        fontSize = 16.sp
-                                    )
-                                }
-                                TextButton(onClick = {
-                                    val nextValue = !isUnderline
-                                    isUnderline = nextValue
-                                    applyCharacterStyle(TextStyleFlag.UNDERLINE, nextValue)
-                                }) {
-                                    Text(
-                                        "U",
-                                        color = if (isUnderline) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                                        textDecoration = TextDecoration.Underline,
-                                        fontSize = 16.sp
+
+                                Spacer(modifier = Modifier.width(4.dp))
+
+                                IconButton(
+                                    onClick = { showStyleTools = false },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_x_lucide),
+                                        contentDescription = "Close style tools",
+                                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
-
-                            Spacer(modifier = Modifier.width(4.dp))
-
+                        }
+                    }
+                    
+                    // Main button row (always visible)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Left side buttons (Attach + Style)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconButton(
-                                onClick = { showStyleTools = false },
-                                modifier = Modifier.size(36.dp)
+                                onClick = { /* Attach */ },
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_x_lucide),
-                                    contentDescription = "Close style tools",
-                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(18.dp)
+                                    painter = painterResource(R.drawable.ic_file_plus_corner),
+                                    contentDescription = "Attach",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { showStyleTools = !showStyleTools },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_a_large_small),
+                                    contentDescription = "Style",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth().fillMaxHeight()
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        IconButton(
-                            onClick = { /* Attach */ },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_file_plus_corner),
-                                contentDescription = "Attach",
-                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        IconButton(
-                            onClick = { showStyleTools = !showStyleTools },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_a_large_small),
-                                contentDescription = "Style",
-                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier.height(40.dp).width(actionContainerWidth)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 6.dp)
-                    ) {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showActions,
-                            modifier = Modifier.align(Alignment.CenterStart).padding(end = 4.dp),
-                            enter = fadeIn(animationSpec = tween(180)),
-                            exit = fadeOut(animationSpec = tween(140))
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                IconButton(
-                                    onClick = {
-                                        showActions = false
-                                        val shareText = buildString {
-                                            append(editTitle.text.trim())
-                                            if (editBody.text.isNotBlank()) { append("\n\n"); append(editBody.text.trim()) }
-                                        }
-                                        context.startActivity(Intent.createChooser(
-                                            Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) },
-                                            "Share note"
-                                        ))
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(painterResource(R.drawable.ic_share2_lucide), contentDescription = "Share",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
-                                }
-                                IconButton(
-                                    onClick = {
-                                        showActions = false
-                                        onDelete()
-                                    },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(painterResource(R.drawable.ic_trash_lucide), contentDescription = "Delete",
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
-                                }
-                            }
-                        }
-
+                        
+                        // Right side: 3-dot button with actions
                         Box(
-                            modifier = Modifier.align(Alignment.CenterEnd).size(28.dp)
+                            modifier = Modifier.height(40.dp).width(actionContainerWidth)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 6.dp)
                         ) {
-                            IconButton(
-                                onClick = { showActions = !showActions },
-                                modifier = Modifier.fillMaxSize()
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showActions,
+                                modifier = Modifier.align(Alignment.CenterStart).padding(end = 4.dp),
+                                enter = fadeIn(animationSpec = tween(180)),
+                                exit = fadeOut(animationSpec = tween(140))
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = showActions,
-                                        enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
-                                        exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    IconButton(
+                                        onClick = {
+                                            showActions = false
+                                            val shareText = buildString {
+                                                append(editTitle.text.trim())
+                                                if (editBody.text.isNotBlank()) { append("\n\n"); append(editBody.text.trim()) }
+                                            }
+                                            context.startActivity(Intent.createChooser(
+                                                Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) },
+                                                "Share note"
+                                            ))
+                                        },
+                                        modifier = Modifier.size(28.dp)
                                     ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_x_lucide),
-                                            contentDescription = "Close actions",
-                                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        Icon(painterResource(R.drawable.ic_share2_lucide), contentDescription = "Share",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
                                     }
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = !showActions,
-                                        enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
-                                        exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
+                                    IconButton(
+                                        onClick = {
+                                            showActions = false
+                                            onDelete()
+                                        },
+                                        modifier = Modifier.size(28.dp)
                                     ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_more_vertical),
-                                            contentDescription = "More options",
-                                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        Icon(painterResource(R.drawable.ic_trash_lucide), contentDescription = "Delete",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier.align(Alignment.CenterEnd).size(28.dp)
+                            ) {
+                                IconButton(
+                                    onClick = { showActions = !showActions },
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = showActions,
+                                            enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
+                                            exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_x_lucide),
+                                                contentDescription = "Close actions",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = !showActions,
+                                            enter = fadeIn(animationSpec = tween(180)) + scaleIn(animationSpec = tween(180)),
+                                            exit = fadeOut(animationSpec = tween(140)) + scaleOut(animationSpec = tween(140))
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_more_vertical),
+                                                contentDescription = "More options",
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+
+                // Remove old toolbar - no longer needed
             }
-        }
+        } // Close Bottom Overlays Container
     }
 }
+
 
 // ── New Note Editor Screen ────────────────────────────────────────────────────
 @Composable
