@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.foundation.shape.CircleShape
@@ -631,12 +632,38 @@ private fun NoteBodyEditor(
     activeCursor: SolidColor,
     hiddenCursor: SolidColor,
     onCharLimitReached: () -> Unit = {},
+    scrollState: ScrollState? = null,
     modifier: Modifier = Modifier
 ) {
     var previousText by remember { mutableStateOf(editBody.text) }
     
     // Cache for styled text - only rebuild when text or styles actually change
     val styledTextCache = remember { mutableMapOf<StyledTextCacheKey, AnnotatedString>() }
+    
+    // Track cursor position for auto-scrolling
+    val density = LocalDensity.current
+    val imeHeight = WindowInsets.ime.getBottom(density)
+    
+    // Auto-scroll to keep cursor visible when typing
+    LaunchedEffect(editBody.selection.start, editBody.text.length, imeHeight) {
+        scrollState?.let { scroll ->
+            // Only auto-scroll when keyboard is visible and user is editing
+            if (imeHeight > 0 && isEditMode) {
+                // Calculate approximate cursor position
+                val lineHeight = with(density) { 26.sp.toPx() } // lineHeight from textStyle
+                val cursorLine = editBody.text.substring(0, editBody.selection.start).count { it == '\n' }
+                val approximateCursorY = cursorLine * lineHeight
+                
+                // Calculate target scroll position to keep cursor comfortably above keyboard
+                // Add margin so cursor isn't right at the edge
+                val margin = with(density) { 100.dp.toPx() }
+                val targetScroll = (approximateCursorY - margin).coerceAtLeast(0f).toInt()
+                
+                // Smooth scroll to position (we're already in a coroutine context)
+                scroll.animateScrollTo(targetScroll, tween(150))
+            }
+        }
+    }
     
     fun getCursorLineIndex(text: String, offset: Int): Int {
         val safeOffset = offset.coerceIn(0, text.length)
@@ -1007,6 +1034,11 @@ fun ViewNoteScreen(
 
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f))
 
+        // Google Keep-style scrolling: Detect IME early for use in multiple places
+        val density = LocalDensity.current
+        val imeHeight = WindowInsets.ime.getBottom(density)
+        val isKeyboardVisible = imeHeight > 0
+
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             val activeCursor = SolidColor(MaterialTheme.colorScheme.onBackground)
             val hiddenCursor = SolidColor(Color.Transparent)
@@ -1014,12 +1046,29 @@ fun ViewNoteScreen(
                 handleColor = MaterialTheme.colorScheme.onBackground,
                 backgroundColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
             )
+            
+            // Create scroll state that we can control
+            val scrollState = rememberScrollState()
+            
+            // Calculate dynamic bottom padding based on IME visibility
+            // When keyboard is visible, add extra space to make content scrollable
+            val dynamicBottomPadding = with(density) {
+                if (isKeyboardVisible) {
+                    // Add significant padding when keyboard is visible to enable scrolling
+                    // This allows even short notes to scroll upward comfortably
+                    (imeHeight + 200).toDp()
+                } else {
+                    // Normal padding when keyboard is hidden
+                    76.dp
+                }
+            }
+            
             CompositionLocalProvider(LocalTextSelectionColors provides selectionColors) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 76.dp))
+                        .verticalScroll(scrollState)
+                        .padding(PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = dynamicBottomPadding))
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1083,6 +1132,7 @@ fun ViewNoteScreen(
                         activeCursor = activeCursor,
                         hiddenCursor = hiddenCursor,
                         onCharLimitReached = { charLimitTriggerCount++ },
+                        scrollState = scrollState,
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp)
                     )
                 }
@@ -1094,7 +1144,6 @@ fun ViewNoteScreen(
             )
 
             // ── Bottom Overlays Container (moves up with keyboard) ────────────────
-            val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
             val offsetY = if (isKeyboardVisible) 16.dp else 0.dp
             
             Box(
