@@ -396,7 +396,7 @@ private fun getFormatForLine(lineText: String, formatMap: Map<String, LineFormat
 }
 
 // ── Persistence ───────────────────────────────────────────────────────────────
-private const val MAX_NOTE_BODY_LENGTH = 50_000
+private const val MAX_NOTE_BODY_LENGTH = 20_000
 
 private fun loadNotes(context: Context): List<NoteEntry> {
     val json = context.getSharedPreferences("journal_notes", Context.MODE_PRIVATE)
@@ -607,6 +607,13 @@ private fun NoteCard(note: NoteEntry, onClick: () -> Unit) {
     }
 }
 
+// Cache for styled text to avoid rebuilding on every frame
+private data class StyledTextCacheKey(
+    val text: String,
+    val formatMapHash: Int,
+    val charStylesHash: Int
+)
+
 @Composable
 private fun NoteBodyEditor(
     editBody: TextFieldValue,
@@ -623,9 +630,13 @@ private fun NoteBodyEditor(
     bodyFocusRequester: FocusRequester,
     activeCursor: SolidColor,
     hiddenCursor: SolidColor,
+    onCharLimitReached: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var previousText by remember { mutableStateOf(editBody.text) }
+    
+    // Cache for styled text - only rebuild when text or styles actually change
+    val styledTextCache = remember { mutableMapOf<StyledTextCacheKey, AnnotatedString>() }
     
     fun getCursorLineIndex(text: String, offset: Int): Int {
         val safeOffset = offset.coerceIn(0, text.length)
@@ -639,9 +650,24 @@ private fun NoteBodyEditor(
     }
 
     fun buildStyledBodyText(text: String, formats: Map<String, LineFormatData>, charStyles: Map<Int, CharacterStyles>): AnnotatedString {
+        // Create cache key based on text and styles
+        val cacheKey = StyledTextCacheKey(
+            text = text,
+            formatMapHash = formats.hashCode(),
+            charStylesHash = charStyles.hashCode()
+        )
+        
+        // Return cached result if available
+        styledTextCache[cacheKey]?.let { return it }
+        
+        // Limit cache size to prevent memory issues
+        if (styledTextCache.size > 10) {
+            styledTextCache.clear()
+        }
+        
         val lines = text.split("\n")
         
-        return buildAnnotatedString {
+        val result = buildAnnotatedString {
             var charIndex = 0
             
             lines.forEachIndexed { lineIndex, lineText ->
@@ -649,22 +675,48 @@ private fun NoteBodyEditor(
                 val lineFormat = formats[hash] ?: LineFormatData(contentHash = hash, fontSize = "Aa")
                 val fontSize = getFontSizeForLabel(lineFormat.fontSize)
                 
-                // Apply styles character by character
+                // Optimize: batch characters with same style together
+                var batchStart = 0
+                var currentStyle: CharacterStyles? = if (lineText.isNotEmpty()) {
+                    charStyles[charIndex]
+                } else null
+                
                 lineText.forEachIndexed { charInLine, char ->
                     val globalCharIndex = charIndex + charInLine
                     val charStyle = charStyles[globalCharIndex]
                     
+                    // Check if style changed - if so, append the batch
+                    if (charStyle != currentStyle) {
+                        if (batchStart < charInLine) {
+                            val spanStyle = SpanStyle(
+                                color = bodyTextColor,
+                                fontSize = fontSize,
+                                fontFamily = FontFamily.Default,
+                                fontWeight = if (currentStyle?.bold == true) FontWeight.Bold else null,
+                                fontStyle = if (currentStyle?.italic == true) FontStyle.Italic else null,
+                                textDecoration = if (currentStyle?.underline == true) TextDecoration.Underline else null
+                            )
+                            withStyle(spanStyle) {
+                                append(lineText.substring(batchStart, charInLine))
+                            }
+                        }
+                        batchStart = charInLine
+                        currentStyle = charStyle
+                    }
+                }
+                
+                // Append remaining batch for this line
+                if (batchStart < lineText.length) {
                     val spanStyle = SpanStyle(
                         color = bodyTextColor,
                         fontSize = fontSize,
                         fontFamily = FontFamily.Default,
-                        fontWeight = if (charStyle?.bold == true) FontWeight.Bold else null,
-                        fontStyle = if (charStyle?.italic == true) FontStyle.Italic else null,
-                        textDecoration = if (charStyle?.underline == true) TextDecoration.Underline else null
+                        fontWeight = if (currentStyle?.bold == true) FontWeight.Bold else null,
+                        fontStyle = if (currentStyle?.italic == true) FontStyle.Italic else null,
+                        textDecoration = if (currentStyle?.underline == true) TextDecoration.Underline else null
                     )
-
                     withStyle(spanStyle) {
-                        append(char.toString())
+                        append(lineText.substring(batchStart))
                     }
                 }
                 
@@ -684,24 +736,51 @@ private fun NoteBodyEditor(
                 }
             }
         }
+        
+        // Cache the result
+        styledTextCache[cacheKey] = result
+        return result
     }
 
     BasicTextField(
         value = editBody,
         onValueChange = { newValue ->
+            // Check if at character limit and trying to add more characters
+            val isAtLimit = editBody.text.length >= MAX_NOTE_BODY_LENGTH
+            val isAddingText = newValue.text.length > editBody.text.length
+            
+            if (isAtLimit && isAddingText) {
+                // Trigger notification
+                onCharLimitReached()
+                // Reject input - don't update state at all
+                return@BasicTextField
+            }
+            
+            // Enforce character limit for paste operations or other bulk additions
+            val limitedText = newValue.text.take(MAX_NOTE_BODY_LENGTH)
+            val limitedValue = if (limitedText.length < newValue.text.length) {
+                // Text was truncated, adjust selection
+                TextFieldValue(
+                    text = limitedText,
+                    selection = TextRange(limitedText.length.coerceAtMost(newValue.selection.start))
+                )
+            } else {
+                newValue
+            }
+            
             // Update format map to track line changes
-            val updatedFormatMap = updateFormatMapForEdit(previousText, newValue.text, formatMap)
+            val updatedFormatMap = updateFormatMapForEdit(previousText, limitedValue.text, formatMap)
             onFormatMapChange(updatedFormatMap)
             
             // Update character styles to track character changes
-            val updatedCharStyles = updateCharacterStylesForEdit(previousText, newValue.text, characterStyles)
+            val updatedCharStyles = updateCharacterStylesForEdit(previousText, limitedValue.text, characterStyles)
             onCharacterStylesChange(updatedCharStyles)
             
-            previousText = newValue.text
+            previousText = limitedValue.text
             
-            val newLineIndex = getCursorLineIndex(newValue.text, newValue.selection.start)
+            val newLineIndex = getCursorLineIndex(limitedValue.text, limitedValue.selection.start)
             onCurrentLineIndexChange(newLineIndex)
-            onBodyChange(newValue)
+            onBodyChange(limitedValue)
             if (!isEditMode) onEditModeChange(true)
         },
         modifier = modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp).focusRequester(bodyFocusRequester),
@@ -713,9 +792,11 @@ private fun NoteBodyEditor(
         ),
         cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-        visualTransformation = { annotatedString ->
-            val styledText = buildStyledBodyText(annotatedString.text, formatMap, characterStyles)
-            TransformedText(styledText, OffsetMapping.Identity)
+        visualTransformation = remember(editBody.text, formatMap, characterStyles) {
+            { annotatedString ->
+                val styledText = buildStyledBodyText(annotatedString.text, formatMap, characterStyles)
+                TransformedText(styledText, OffsetMapping.Identity)
+            }
         },
         decorationBox = { inner ->
             if (editBody.text.isEmpty() && isEditMode) {
@@ -766,7 +847,18 @@ fun ViewNoteScreen(
     var currentLineIndex by remember { mutableStateOf(0) }
     var showActions by remember { mutableStateOf(false) }
     var showStyleTools by remember { mutableStateOf(false) }
+    var charLimitTriggerCount by remember { mutableIntStateOf(0) }
+    var showCharLimitNotification by remember { mutableStateOf(false) }
     val bodyTextColor = MaterialTheme.colorScheme.onBackground
+    
+    // Auto-dismiss notification after 3 seconds, restarts on every trigger
+    LaunchedEffect(charLimitTriggerCount) {
+        if (charLimitTriggerCount > 0) {
+            showCharLimitNotification = true
+            kotlinx.coroutines.delay(3000)
+            showCharLimitNotification = false
+        }
+    }
     
     fun getCurrentLineText(): String {
         val lines = editBody.text.split("\n")
@@ -782,33 +874,34 @@ fun ViewNoteScreen(
         mutableStateOf(currentFormat.fontSize)
     }
     
-    // Character styles based on selection
-    fun getSelectionStyles(): CharacterStyles? {
+    // Character styles based on selection - memoized to avoid recomputation
+    val selectionStyles = remember(editBody.selection.start, editBody.selection.end, characterStyles.hashCode()) {
         val start = editBody.selection.start
         val end = editBody.selection.end
         if (start == end) {
             // No selection - check character before cursor
-            return if (start > 0) characterStyles[start - 1] else null
+            if (start > 0) characterStyles[start - 1] else null
+        } else {
+            // Has selection - check if all selected characters have same style
+            val selectedStyles = (start until end).mapNotNull { characterStyles[it] }
+            if (selectedStyles.isEmpty()) {
+                null
+            } else {
+                val allBold = selectedStyles.all { it.bold }
+                val allItalic = selectedStyles.all { it.italic }
+                val allUnderline = selectedStyles.all { it.underline }
+                CharacterStyles(0, allBold, allItalic, allUnderline)
+            }
         }
-        // Has selection - check if all selected characters have same style
-        val selectedStyles = (start until end).mapNotNull { characterStyles[it] }
-        if (selectedStyles.isEmpty()) return null
-        
-        val allBold = selectedStyles.all { it.bold }
-        val allItalic = selectedStyles.all { it.italic }
-        val allUnderline = selectedStyles.all { it.underline }
-        
-        return CharacterStyles(0, allBold, allItalic, allUnderline)
     }
     
-    val selectionStyles = getSelectionStyles()
-    var isBold by remember(editBody.selection, characterStyles) { 
+    var isBold by remember(selectionStyles) { 
         mutableStateOf(selectionStyles?.bold ?: false)
     }
-    var isItalic by remember(editBody.selection, characterStyles) { 
+    var isItalic by remember(selectionStyles) { 
         mutableStateOf(selectionStyles?.italic ?: false)
     }
-    var isUnderline by remember(editBody.selection, characterStyles) { 
+    var isUnderline by remember(selectionStyles) { 
         mutableStateOf(selectionStyles?.underline ?: false)
     }
 
@@ -848,13 +941,31 @@ fun ViewNoteScreen(
         val format = formatMap[hash] ?: LineFormatData(contentHash = hash)
         currentFontSize = format.fontSize
         
-        val styles = getSelectionStyles()
+        // Recalculate selection styles
+        val start = editBody.selection.start
+        val end = editBody.selection.end
+        val styles = if (start == end) {
+            if (start > 0) characterStyles[start - 1] else null
+        } else {
+            val selectedStyles = (start until end).mapNotNull { characterStyles[it] }
+            if (selectedStyles.isEmpty()) {
+                null
+            } else {
+                val allBold = selectedStyles.all { it.bold }
+                val allItalic = selectedStyles.all { it.italic }
+                val allUnderline = selectedStyles.all { it.underline }
+                CharacterStyles(0, allBold, allItalic, allUnderline)
+            }
+        }
+        
         isBold = styles?.bold ?: false
         isItalic = styles?.italic ?: false
         isUnderline = styles?.underline ?: false
     }
 
-    LaunchedEffect(currentLineIndex, editBody.text, editBody.selection, formatMap, characterStyles) {
+    // Debounced style sync - only update when cursor actually moves or selection changes meaningfully
+    LaunchedEffect(currentLineIndex, editBody.selection.start, editBody.selection.end) {
+        kotlinx.coroutines.delay(50) // Small debounce to batch rapid changes
         syncStyleButtonState()
     }
     
@@ -910,8 +1021,25 @@ fun ViewNoteScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 76.dp))
                 ) {
-                    Text(text = formatDate(note.timestamp),
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f), fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = formatDate(note.timestamp),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "${editBody.text.length} / $MAX_NOTE_BODY_LENGTH",
+                            color = MaterialTheme.colorScheme.onBackground.copy(
+                                alpha = if (editBody.text.length > MAX_NOTE_BODY_LENGTH * 0.9) 0.7f else 0.4f
+                            ),
+                            fontSize = 12.sp,
+                            fontWeight = if (editBody.text.length > MAX_NOTE_BODY_LENGTH * 0.9) FontWeight.Medium else FontWeight.Normal
+                        )
+                    }
                     Spacer(Modifier.height(12.dp))
                     BasicTextField(
                         value = editTitle,
@@ -954,6 +1082,7 @@ fun ViewNoteScreen(
                         bodyFocusRequester = bodyFocusRequester,
                         activeCursor = activeCursor,
                         hiddenCursor = hiddenCursor,
+                        onCharLimitReached = { charLimitTriggerCount++ },
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp)
                     )
                 }
@@ -975,6 +1104,41 @@ fun ViewNoteScreen(
                     .imePadding()
                     .offset(y = offsetY) // Only offset when keyboard is visible
             ) {
+                // Character limit notification (appears above toolbar)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showCharLimitNotification,
+                    enter = scaleIn(
+                        initialScale = 0.8f,
+                        animationSpec = tween(200)
+                    ) + fadeIn(tween(200)),
+                    exit = scaleOut(
+                        targetScale = 0.8f,
+                        animationSpec = tween(200)
+                    ) + fadeOut(tween(200)),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 68.dp)
+                        .padding(horizontal = 20.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.errorContainer,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "You've reached the character limit",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+                
                 // Yellow Container at very bottom with all UI
                 Box(
                     modifier = Modifier
