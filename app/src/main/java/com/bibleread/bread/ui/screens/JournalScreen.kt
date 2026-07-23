@@ -63,6 +63,12 @@ import androidx.core.content.edit
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 
 // ── Note model ────────────────────────────────────────────────────────────────
 data class NoteEntry(
@@ -151,11 +157,21 @@ private fun updateCharacterStylesForEdit(
     }
     
     // For inserted characters, inherit style from character at cursor position
+    // Exception: Don't inherit underline when pressing Enter (inserting newline)
     if (charsInserted > 0 && oldEditStart > 0) {
         val inheritStyle = oldStyles[oldEditStart - 1]
         if (inheritStyle != null) {
+            val insertedText = newText.substring(newEditStart, newEditEnd)
+            val isPressedEnter = insertedText == "\n"
+            
             for (i in newEditStart until newEditEnd) {
-                result[i] = inheritStyle.copy(charIndex = i)
+                // If user pressed Enter, don't inherit underline for the newline
+                result[i] = if (isPressedEnter) {
+                    inheritStyle.copy(charIndex = i, underline = false)
+                } else {
+                    // Normal typing - inherit all styles including underline
+                    inheritStyle.copy(charIndex = i)
+                }
             }
         }
     }
@@ -633,38 +649,64 @@ private fun NoteBodyEditor(
     hiddenCursor: SolidColor,
     onCharLimitReached: () -> Unit = {},
     scrollState: ScrollState? = null,
+    viewportHeightPx: Int = 0,
     modifier: Modifier = Modifier
 ) {
     var previousText by remember { mutableStateOf(editBody.text) }
-    
+
     // Cache for styled text - only rebuild when text or styles actually change
     val styledTextCache = remember { mutableMapOf<StyledTextCacheKey, AnnotatedString>() }
-    
-    // Track cursor position for auto-scrolling
-    val density = LocalDensity.current
-    val imeHeight = WindowInsets.ime.getBottom(density)
-    
-    // Auto-scroll to keep cursor visible when typing
-    LaunchedEffect(editBody.selection.start, editBody.text.length, imeHeight) {
-        scrollState?.let { scroll ->
-            // Only auto-scroll when keyboard is visible and user is editing
-            if (imeHeight > 0 && isEditMode) {
-                // Calculate approximate cursor position
-                val lineHeight = with(density) { 26.sp.toPx() } // lineHeight from textStyle
-                val cursorLine = editBody.text.substring(0, editBody.selection.start).count { it == '\n' }
-                val approximateCursorY = cursorLine * lineHeight
-                
-                // Calculate target scroll position to keep cursor comfortably above keyboard
-                // Add margin so cursor isn't right at the edge
-                val margin = with(density) { 100.dp.toPx() }
-                val targetScroll = (approximateCursorY - margin).coerceAtLeast(0f).toInt()
-                
-                // Smooth scroll to position (we're already in a coroutine context)
-                scroll.animateScrollTo(targetScroll, tween(150))
-            }
+
+    // ── Cursor-follow auto-scroll (Keep-style, speed-controllable) ────────────
+val density = LocalDensity.current
+val imeHeightPx = WindowInsets.ime.getBottom(density)
+var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+var textFieldCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+
+// 🔧 Tune scroll speed here:
+    val autoScrollDurationMs = 220
+    val toolbarHeightPx = with(density) { 60.dp.toPx() }  // matches your "Yellow Container" height
+    val scrollMarginPx = with(density) { 32.dp.toPx() } + toolbarHeightPx
+
+    LaunchedEffect(editBody.selection, textLayoutResult, imeHeightPx, isEditMode, viewportHeightPx) {
+        if (!isEditMode || scrollState == null) return@LaunchedEffect
+        val layout = textLayoutResult ?: return@LaunchedEffect
+        val coords = textFieldCoordinates ?: return@LaunchedEffect
+        if (imeHeightPx <= 0 || viewportHeightPx <= 0) return@LaunchedEffect
+
+        val cursorOffset = editBody.selection.end.coerceIn(0, editBody.text.length)
+        val cursorRect = try {
+            layout.getCursorRect(cursorOffset)
+        } catch (_: Exception) {
+            return@LaunchedEffect
+        }
+
+        // Cursor's Y position relative to the scrollable container (not just the field)
+        val fieldTopInScroll = coords.positionInParent().y
+        val cursorTopInScroll = fieldTopInScroll + cursorRect.top
+        val cursorBottomInScroll = fieldTopInScroll + cursorRect.bottom
+
+        // Visible viewport height above the keyboard — from the real screen container,
+        // not the scrollable Column's parent (which grows with content, was the bug)
+        val visibleBottom = scrollState.value + viewportHeightPx - imeHeightPx - scrollMarginPx
+
+        if (cursorBottomInScroll > visibleBottom) {
+            val target = (scrollState.value + (cursorBottomInScroll - visibleBottom))
+                .toInt()
+                .coerceIn(0, scrollState.maxValue)
+            scrollState.animateScrollTo(
+                value = target,
+                animationSpec = tween(durationMillis = autoScrollDurationMs)
+            )
+        } else if (cursorTopInScroll < scrollState.value) {
+            val target = cursorTopInScroll.toInt().coerceIn(0, scrollState.maxValue)
+            scrollState.animateScrollTo(
+                value = target,
+                animationSpec = tween(durationMillis = autoScrollDurationMs)
+            )
         }
     }
-    
+
     fun getCursorLineIndex(text: String, offset: Int): Int {
         val safeOffset = offset.coerceIn(0, text.length)
         return text.substring(0, safeOffset).count { it == '\n' }
@@ -677,42 +719,37 @@ private fun NoteBodyEditor(
     }
 
     fun buildStyledBodyText(text: String, formats: Map<String, LineFormatData>, charStyles: Map<Int, CharacterStyles>): AnnotatedString {
-        // Create cache key based on text and styles
         val cacheKey = StyledTextCacheKey(
             text = text,
             formatMapHash = formats.hashCode(),
             charStylesHash = charStyles.hashCode()
         )
-        
-        // Return cached result if available
+
         styledTextCache[cacheKey]?.let { return it }
-        
-        // Limit cache size to prevent memory issues
+
         if (styledTextCache.size > 10) {
             styledTextCache.clear()
         }
-        
+
         val lines = text.split("\n")
-        
+
         val result = buildAnnotatedString {
             var charIndex = 0
-            
+
             lines.forEachIndexed { lineIndex, lineText ->
                 val hash = hashLineContent(lineText, lineIndex)
                 val lineFormat = formats[hash] ?: LineFormatData(contentHash = hash, fontSize = "Aa")
                 val fontSize = getFontSizeForLabel(lineFormat.fontSize)
-                
-                // Optimize: batch characters with same style together
+
                 var batchStart = 0
                 var currentStyle: CharacterStyles? = if (lineText.isNotEmpty()) {
                     charStyles[charIndex]
                 } else null
-                
-                lineText.forEachIndexed { charInLine, char ->
+
+                lineText.forEachIndexed { charInLine, _ ->
                     val globalCharIndex = charIndex + charInLine
                     val charStyle = charStyles[globalCharIndex]
-                    
-                    // Check if style changed - if so, append the batch
+
                     if (charStyle != currentStyle) {
                         if (batchStart < charInLine) {
                             val spanStyle = SpanStyle(
@@ -731,8 +768,7 @@ private fun NoteBodyEditor(
                         currentStyle = charStyle
                     }
                 }
-                
-                // Append remaining batch for this line
+
                 if (batchStart < lineText.length) {
                     val spanStyle = SpanStyle(
                         color = bodyTextColor,
@@ -746,10 +782,9 @@ private fun NoteBodyEditor(
                         append(lineText.substring(batchStart))
                     }
                 }
-                
+
                 charIndex += lineText.length
-                
-                // Add newline between lines (except after last line)
+
                 if (lineIndex < lines.lastIndex) {
                     val spanStyle = SpanStyle(
                         color = bodyTextColor,
@@ -759,12 +794,11 @@ private fun NoteBodyEditor(
                     withStyle(spanStyle) {
                         append("\n")
                     }
-                    charIndex += 1 // for the newline character
+                    charIndex += 1
                 }
             }
         }
-        
-        // Cache the result
+
         styledTextCache[cacheKey] = result
         return result
     }
@@ -772,21 +806,16 @@ private fun NoteBodyEditor(
     BasicTextField(
         value = editBody,
         onValueChange = { newValue ->
-            // Check if at character limit and trying to add more characters
             val isAtLimit = editBody.text.length >= MAX_NOTE_BODY_LENGTH
             val isAddingText = newValue.text.length > editBody.text.length
-            
+
             if (isAtLimit && isAddingText) {
-                // Trigger notification
                 onCharLimitReached()
-                // Reject input - don't update state at all
                 return@BasicTextField
             }
-            
-            // Enforce character limit for paste operations or other bulk additions
+
             val limitedText = newValue.text.take(MAX_NOTE_BODY_LENGTH)
             val limitedValue = if (limitedText.length < newValue.text.length) {
-                // Text was truncated, adjust selection
                 TextFieldValue(
                     text = limitedText,
                     selection = TextRange(limitedText.length.coerceAtMost(newValue.selection.start))
@@ -794,23 +823,25 @@ private fun NoteBodyEditor(
             } else {
                 newValue
             }
-            
-            // Update format map to track line changes
+
             val updatedFormatMap = updateFormatMapForEdit(previousText, limitedValue.text, formatMap)
             onFormatMapChange(updatedFormatMap)
-            
-            // Update character styles to track character changes
+
             val updatedCharStyles = updateCharacterStylesForEdit(previousText, limitedValue.text, characterStyles)
             onCharacterStylesChange(updatedCharStyles)
-            
+
             previousText = limitedValue.text
-            
+
             val newLineIndex = getCursorLineIndex(limitedValue.text, limitedValue.selection.start)
             onCurrentLineIndexChange(newLineIndex)
             onBodyChange(limitedValue)
             if (!isEditMode) onEditModeChange(true)
         },
-        modifier = modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp).focusRequester(bodyFocusRequester),
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 200.dp)
+            .focusRequester(bodyFocusRequester)
+            .onGloballyPositioned { coordinates -> textFieldCoordinates = coordinates },
         textStyle = TextStyle(
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = 16.sp,
@@ -819,6 +850,7 @@ private fun NoteBodyEditor(
         ),
         cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        onTextLayout = { layoutResult -> textLayoutResult = layoutResult },
         visualTransformation = remember(editBody.text, formatMap, characterStyles) {
             { annotatedString ->
                 val styledText = buildStyledBodyText(annotatedString.text, formatMap, characterStyles)
@@ -837,8 +869,7 @@ private fun NoteBodyEditor(
             inner()
         }
     )
-    
-    // Initialize previousText
+
     LaunchedEffect(Unit) {
         previousText = editBody.text
     }
@@ -1039,7 +1070,14 @@ fun ViewNoteScreen(
         val imeHeight = WindowInsets.ime.getBottom(density)
         val isKeyboardVisible = imeHeight > 0
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        var viewportHeightPx by remember { mutableIntStateOf(0) }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onGloballyPositioned { viewportHeightPx = it.size.height }
+        ) {
             val activeCursor = SolidColor(MaterialTheme.colorScheme.onBackground)
             val hiddenCursor = SolidColor(Color.Transparent)
             val selectionColors = TextSelectionColors(
@@ -1049,7 +1087,8 @@ fun ViewNoteScreen(
             
             // Create scroll state that we can control
             val scrollState = rememberScrollState()
-            
+
+
             // Calculate dynamic bottom padding based on IME visibility
             // When keyboard is visible, add extra space to make content scrollable
             val dynamicBottomPadding = with(density) {
@@ -1133,6 +1172,7 @@ fun ViewNoteScreen(
                         hiddenCursor = hiddenCursor,
                         onCharLimitReached = { charLimitTriggerCount++ },
                         scrollState = scrollState,
+                        viewportHeightPx = viewportHeightPx,
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp)
                     )
                 }
