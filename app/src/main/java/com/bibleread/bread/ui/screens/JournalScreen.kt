@@ -77,7 +77,8 @@ data class NoteEntry(
     val body: String,
     val timestamp: Long,
     val fontSizesJson: String = "", // Line-level font sizes
-    val charStylesJson: String = "" // Character-level bold/italic/underline
+    val charStylesJson: String = "", // Character-level bold/italic/underline
+    val lineIdsJson: String = ""     // Stable per-line identity, parallel to body's lines
 )
 
 // Line formatting that sticks to content, not position
@@ -226,149 +227,77 @@ private fun jsonToCharacterStyles(json: String?): Map<Int, CharacterStyles> {
 }
 
 // Create a stable hash from line content
-private fun hashLineContent(text: String, lineIndex: Int = -1): String {
-    val key = text.take(50).trim()
-    // For empty lines, use position-based identifier when available
-    return if (key.isEmpty() && lineIndex >= 0) {
-        "empty_line_$lineIndex"
-    } else if (key.isEmpty()) {
-        "empty_line_${System.nanoTime()}"
-    } else {
-        key
+// Stable per-line identity — NOT derived from text content, so duplicate
+// lines never collide on the same formatting entry.
+private fun getLineId(lineIds: List<String>, index: Int): String =
+    lineIds.getOrNull(index) ?: java.util.UUID.randomUUID().toString()
+
+private fun newLineId(): String = java.util.UUID.randomUUID().toString()
+
+private fun lineIdsToJson(ids: List<String>): String {
+    val arr = JSONArray()
+    ids.forEach { arr.put(it) }
+    return arr.toString()
+}
+
+private fun jsonToLineIds(json: String?, fallbackLineCount: Int): List<String> {
+    if (json.isNullOrBlank()) {
+        return List(fallbackLineCount) { newLineId() }
+    }
+    return try {
+        val arr = JSONArray(json)
+        val result = (0 until arr.length()).map { arr.getString(it) }
+        if (result.size == fallbackLineCount) result
+        else {
+            // Mismatch (e.g. corrupted/old data) — regenerate safely
+            List(fallbackLineCount) { newLineId() }
+        }
+    } catch (_: Exception) {
+        List(fallbackLineCount) { newLineId() }
     }
 }
 
-// Update format map when text changes
-private fun updateFormatMapForEdit(
-    oldText: String,
-    newText: String,
-    oldFormatMap: Map<String, LineFormatData>
-): Map<String, LineFormatData> {
-    val oldLines = oldText.split("\n")
-    val newLines = newText.split("\n")
-    val result = mutableMapOf<String, LineFormatData>()
-    
-    // Detect if Enter was pressed (line count increased)
-    val enterPressed = newLines.size > oldLines.size
-    val linesDeleted = newLines.size < oldLines.size
-    
-    if (enterPressed) {
-        // Enter was pressed - need to handle line splitting intelligently
-        newLines.forEachIndexed { index, newLine ->
-            val hash = hashLineContent(newLine, index)
-            
-            // Check if this exact content existed before (unchanged line)
-            val existingFormat = if (newLine.trim().isEmpty()) {
-                // Empty line - check if there was a format at this position
-                val oldHash = hashLineContent("", index)
-                oldFormatMap[oldHash]
-            } else {
-                // Non-empty line - match by content
-                oldFormatMap.entries.find { it.key == newLine.take(50).trim() }?.value
+// Diff old line list vs new line list and update ids to match, by POSITION,
+// never by content. This is what replaces updateFormatMapForEdit.
+private fun updateLineIdsForEdit(
+    oldLineCount: Int,
+    newLineCount: Int,
+    oldLineIds: List<String>,
+    editedAtLineIndex: Int
+): List<String> {
+    val ids = oldLineIds.toMutableList()
+    // Defensive: make sure ids matches oldLineCount before diffing
+    while (ids.size < oldLineCount) ids.add(newLineId())
+    while (ids.size > oldLineCount) ids.removeAt(ids.lastIndex)
+
+    when {
+        newLineCount > oldLineCount -> {
+            val insertCount = newLineCount - oldLineCount
+            repeat(insertCount) {
+                val insertAt = (editedAtLineIndex + 1).coerceIn(0, ids.size)
+                ids.add(insertAt, newLineId())
             }
-            
-            if (existingFormat != null) {
-                // Line existed before with this exact content
-                result[hash] = existingFormat.copy(contentHash = hash)
-            } else {
-                // New or split line - check if it came from splitting an existing line
-                var foundSplitSource = false
-                
-                // Check if this line's content is a substring of any old line (line was split)
-                oldLines.forEachIndexed { oldIndex, oldLine ->
-                    if (!foundSplitSource && oldLine.contains(newLine) && newLine.isNotEmpty()) {
-                        // This new line was part of an old line - inherit that format
-                        val oldFormat = oldFormatMap.entries.find { 
-                            it.key == oldLine.take(50).trim() 
-                        }?.value
-                        
-                        if (oldFormat != null) {
-                            result[hash] = oldFormat.copy(contentHash = hash)
-                            foundSplitSource = true
-                        }
-                    }
-                }
-                
-                if (!foundSplitSource) {
-                    // Truly new line - use default format
-                    result[hash] = LineFormatData(contentHash = hash, fontSize = "Aa")
+        }
+        newLineCount < oldLineCount -> {
+            val removeCount = oldLineCount - newLineCount
+            repeat(removeCount) {
+                if (ids.size > 1) {
+                    val removeAt = (editedAtLineIndex + 1).coerceIn(0, ids.size - 1)
+                    ids.removeAt(removeAt)
                 }
             }
         }
-    } else if (linesDeleted) {
-        // Lines were merged - inherit format from the FIRST line involved in the merge
-        newLines.forEachIndexed { index, newLine ->
-            val newHash = hashLineContent(newLine, index)
-            
-            // Check if exact content match exists
-            val exactMatch = oldFormatMap.entries.find { 
-                it.key == newLine.take(50).trim()
-            }?.value
-            
-            if (exactMatch != null) {
-                result[newHash] = exactMatch.copy(contentHash = newHash)
-            } else {
-                // This line is likely a merged line
-                // Find the first old line at this position - it should provide the format
-                val firstOldLine = oldLines.getOrNull(index) ?: ""
-                val firstOldFormat = oldFormatMap.entries.find { 
-                    it.key == firstOldLine.take(50).trim() 
-                }?.value
-                
-                if (firstOldFormat != null) {
-                    // Merged line inherits from first line (the H1 in your example)
-                    result[newHash] = firstOldFormat.copy(contentHash = newHash)
-                } else {
-                    // Fallback to default
-                    result[newHash] = LineFormatData(contentHash = newHash, fontSize = "Aa")
-                }
-            }
-        }
-    } else {
-        // Same line count - normal editing (typing/deleting within a line)
-        newLines.forEachIndexed { index, newLine ->
-            val newHash = hashLineContent(newLine, index)
-            
-            // Check if this exact line content already has format
-            val existingByContent = oldFormatMap.entries.find { 
-                it.key == newLine.take(50).trim() || (newLine.trim().isEmpty() && it.key.startsWith("empty_line_"))
-            }?.value
-            
-            if (existingByContent != null) {
-                result[newHash] = existingByContent.copy(contentHash = newHash)
-            } else {
-                // Line was edited - try to inherit from old line at same position
-                val oldLine = oldLines.getOrNull(index) ?: ""
-                if (oldLine.isNotEmpty() && newLine.isNotEmpty()) {
-                    val oldHash = hashLineContent(oldLine, index)
-                    val oldFormat = oldFormatMap.entries.find { 
-                        it.key == oldLine.take(50).trim() 
-                    }?.value
-                    
-                    if (oldFormat != null) {
-                        // Check if this is truly an edit of the same line (similar content)
-                        val oldKey = oldLine.take(30).trim()
-                        val newKey = newLine.take(30).trim()
-                        
-                        // Only inherit if there's clear overlap (you're editing the same line)
-                        if (oldKey.isNotEmpty() && newKey.isNotEmpty()) {
-                            if (newKey.contains(oldKey.take(10)) || oldKey.contains(newKey.take(10))) {
-                                result[newHash] = oldFormat.copy(contentHash = newHash)
-                            }
-                        }
-                    }
-                }
-                
-                // If still no format, save with default
-                if (!result.containsKey(newHash)) {
-                    result[newHash] = LineFormatData(contentHash = newHash, fontSize = "Aa")
-                }
-            }
-        }
+        // same count: in-place edit, ids unchanged
     }
-    
-    return result
+
+    while (ids.size < newLineCount) ids.add(newLineId())
+    while (ids.size > newLineCount) ids.removeAt(ids.lastIndex)
+
+    return ids
 }
+
+// Update format map when text changes
+
 
 // Convert format map to JSON
 private fun formatMapToJson(formatMap: Map<String, LineFormatData>): String {
@@ -407,9 +336,10 @@ private fun jsonToFormatMap(json: String?): Map<String, LineFormatData> {
 }
 
 // Get format for a line by its content
-private fun getFormatForLine(lineText: String, formatMap: Map<String, LineFormatData>): LineFormatData {
-    val hash = hashLineContent(lineText)
-    return formatMap[hash] ?: LineFormatData(contentHash = hash)
+// Get format for a line by its stable id (position-based, not content-based)
+private fun getFormatForLine(lineIds: List<String>, lineIndex: Int, formatMap: Map<String, LineFormatData>): LineFormatData {
+    val id = getLineId(lineIds, lineIndex)
+    return formatMap[id] ?: LineFormatData(contentHash = id)
 }
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -428,7 +358,8 @@ private fun loadNotes(context: Context): List<NoteEntry> {
                 o.getString("body"),
                 o.getLong("timestamp"),
                 o.optString("font_sizes_json", ""),
-                o.optString("char_styles_json", "")
+                o.optString("char_styles_json", ""),
+                o.optString("line_ids_json", "")
             )
         }
     } catch (e: Exception) {
@@ -638,6 +569,9 @@ private fun NoteBodyEditor(
     formatMap: Map<String, LineFormatData>,
     onFormatMapChange: (Map<String, LineFormatData>) -> Unit,
     getLatestFormatMap: () -> Map<String, LineFormatData>,
+    lineIds: List<String>,
+    onLineIdsChange: (List<String>) -> Unit,
+    getLatestLineIds: () -> List<String>,
     characterStyles: Map<Int, CharacterStyles>,
     onCharacterStylesChange: (Map<Int, CharacterStyles>) -> Unit,
     getLatestCharacterStyles: () -> Map<Int, CharacterStyles>,
@@ -654,6 +588,7 @@ private fun NoteBodyEditor(
     viewportHeightPx: Int = 0,
     modifier: Modifier = Modifier
 ) {
+
     var previousText by remember { mutableStateOf(editBody.text) }
 
     // Cache for styled text - only rebuild when text or styles actually change
@@ -720,11 +655,11 @@ var textFieldCoordinates by remember { mutableStateOf<androidx.compose.ui.layout
         else -> 16.sp
     }
 
-    fun buildStyledBodyText(text: String, formats: Map<String, LineFormatData>, charStyles: Map<Int, CharacterStyles>): AnnotatedString {
+    fun buildStyledBodyText(text: String, formats: Map<String, LineFormatData>, charStyles: Map<Int, CharacterStyles>, ids: List<String>): AnnotatedString {
         val cacheKey = StyledTextCacheKey(
             text = text,
             formatMapHash = formats.hashCode(),
-            charStylesHash = charStyles.hashCode()
+            charStylesHash = charStyles.hashCode() * 31 + ids.hashCode()
         )
 
         styledTextCache[cacheKey]?.let { return it }
@@ -739,8 +674,8 @@ var textFieldCoordinates by remember { mutableStateOf<androidx.compose.ui.layout
             var charIndex = 0
 
             lines.forEachIndexed { lineIndex, lineText ->
-                val hash = hashLineContent(lineText, lineIndex)
-                val lineFormat = formats[hash] ?: LineFormatData(contentHash = hash, fontSize = "Aa")
+                val id = getLineId(lineIds, lineIndex)
+                val lineFormat = formats[id] ?: LineFormatData(contentHash = id, fontSize = "Aa")
                 val fontSize = getFontSizeForLabel(lineFormat.fontSize)
 
                 var batchStart = 0
@@ -826,9 +761,27 @@ var textFieldCoordinates by remember { mutableStateOf<androidx.compose.ui.layout
                 newValue
             }
 
+            // Figure out which line the edit happened at BEFORE text changes,
+            // using the cursor position in the OLD text.
+            val editedAtLineIndex = getCursorLineIndex(previousText, editBody.selection.start)
+
+            val oldLineCount = previousText.split("\n").size
+            val newLineCount = limitedValue.text.split("\n").size
+
+            val liveLineIds = getLatestLineIds()
+            val updatedLineIds = updateLineIdsForEdit(
+                oldLineCount = oldLineCount,
+                newLineCount = newLineCount,
+                oldLineIds = liveLineIds,
+                editedAtLineIndex = editedAtLineIndex
+            )
+            onLineIdsChange(updatedLineIds)
+
+            // formatMap itself doesn't need content-based patching anymore —
+            // it's keyed by line id. Just drop entries for ids that no longer exist.
             val liveFormatMap = getLatestFormatMap()
-            val updatedFormatMap = updateFormatMapForEdit(previousText, limitedValue.text, liveFormatMap)
-            onFormatMapChange(updatedFormatMap)
+            val prunedFormatMap = liveFormatMap.filterKeys { it in updatedLineIds }
+            onFormatMapChange(prunedFormatMap)
 
             val liveCharacterStyles = getLatestCharacterStyles()
             val updatedCharStyles = updateCharacterStylesForEdit(previousText, limitedValue.text, liveCharacterStyles)
@@ -855,9 +808,9 @@ var textFieldCoordinates by remember { mutableStateOf<androidx.compose.ui.layout
         cursorBrush = if (isEditMode) activeCursor else hiddenCursor,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
         onTextLayout = { layoutResult -> textLayoutResult = layoutResult },
-        visualTransformation = remember(editBody.text, formatMap, characterStyles) {
+        visualTransformation = remember(editBody.text, formatMap, characterStyles, lineIds) {
             { annotatedString ->
-                val styledText = buildStyledBodyText(annotatedString.text, formatMap, characterStyles)
+                val styledText = buildStyledBodyText(annotatedString.text, formatMap, characterStyles, lineIds)
                 TransformedText(styledText, OffsetMapping.Identity)
             }
         },
@@ -897,10 +850,16 @@ fun ViewNoteScreen(
     var editBody by remember(note.id) { mutableStateOf(TextFieldValue(note.body)) }
     
     // Format map: line-level font sizes
-    var formatMap by remember(note.id) { 
+    // Stable per-line identity — one id per line, survives edits by position
+    var lineIds by remember(note.id) {
+        mutableStateOf(jsonToLineIds(note.lineIdsJson, note.body.split("\n").size))
+    }
+
+    // Format map: line-level font sizes, keyed by line id (NOT content)
+    var formatMap by remember(note.id) {
         mutableStateOf(jsonToFormatMap(note.fontSizesJson))
     }
-    
+
     // Character styles: character-level bold/italic/underline
     var characterStyles by remember(note.id) {
         mutableStateOf(jsonToCharacterStyles(note.charStylesJson))
@@ -928,9 +887,9 @@ fun ViewNoteScreen(
     }
     
     // Current line's font size for UI
-    val currentLineText = getCurrentLineText()
-    val currentLineHash = hashLineContent(currentLineText, currentLineIndex)
-    val currentFormat = formatMap[currentLineHash] ?: LineFormatData(contentHash = currentLineHash)
+    // Current line's font size for UI
+    val currentLineId = getLineId(lineIds, currentLineIndex)
+    val currentFormat = formatMap[currentLineId] ?: LineFormatData(contentHash = currentLineId)
     
     var currentFontSize by remember(currentLineIndex, editBody.text, formatMap) { 
         mutableStateOf(currentFormat.fontSize)
@@ -968,13 +927,12 @@ fun ViewNoteScreen(
     }
 
     fun applyBodyFontSize(label: String) {
-        val lineText = getCurrentLineText()
-        val hash = hashLineContent(lineText, currentLineIndex)
-        val updatedFormat = (formatMap[hash] ?: LineFormatData(contentHash = hash)).copy(
+        val id = getLineId(lineIds, currentLineIndex)
+        val updatedFormat = (formatMap[id] ?: LineFormatData(contentHash = id)).copy(
             fontSize = label,
-            contentHash = hash
+            contentHash = id
         )
-        formatMap = formatMap + (hash to updatedFormat)
+        formatMap = formatMap + (id to updatedFormat)
         currentFontSize = label
     }
 
@@ -998,9 +956,8 @@ fun ViewNoteScreen(
     }
 
     fun syncStyleButtonState() {
-        val lineText = getCurrentLineText()
-        val hash = hashLineContent(lineText, currentLineIndex)
-        val format = formatMap[hash] ?: LineFormatData(contentHash = hash)
+        val id = getLineId(lineIds, currentLineIndex)
+        val format = formatMap[id] ?: LineFormatData(contentHash = id)
         currentFontSize = format.fontSize
         
         // Recalculate selection styles
@@ -1030,14 +987,15 @@ fun ViewNoteScreen(
         kotlinx.coroutines.delay(50) // Small debounce to batch rapid changes
         syncStyleButtonState()
     }
-    
+
     fun commitEdit() {
         val updated = note.copy(
             title = editTitle.text.trim().ifBlank { "Untitled" },
             body  = editBody.text.take(MAX_NOTE_BODY_LENGTH), // Don't trim - preserves empty lines
             timestamp = note.timestamp,
             fontSizesJson = formatMapToJson(formatMap),
-            charStylesJson = characterStylesToJson(characterStyles)
+            charStylesJson = characterStylesToJson(characterStyles),
+            lineIdsJson = lineIdsToJson(lineIds)
         )
         focusManager.clearFocus()
         isEditMode = false
@@ -1160,6 +1118,11 @@ fun ViewNoteScreen(
                             formatMap = newMap
                         },
                         getLatestFormatMap = { formatMap },
+                        lineIds = lineIds,
+                        onLineIdsChange = { newIds ->
+                            lineIds = newIds
+                        },
+                        getLatestLineIds = { lineIds },
                         characterStyles = characterStyles,
                         onCharacterStylesChange = { newStyles ->
                             characterStyles = newStyles
