@@ -637,8 +637,10 @@ private fun NoteBodyEditor(
     onBodyChange: (TextFieldValue) -> Unit,
     formatMap: Map<String, LineFormatData>,
     onFormatMapChange: (Map<String, LineFormatData>) -> Unit,
+    getLatestFormatMap: () -> Map<String, LineFormatData>,
     characterStyles: Map<Int, CharacterStyles>,
     onCharacterStylesChange: (Map<Int, CharacterStyles>) -> Unit,
+    getLatestCharacterStyles: () -> Map<Int, CharacterStyles>,
     currentLineIndex: Int,
     onCurrentLineIndexChange: (Int) -> Unit,
     isEditMode: Boolean,
@@ -824,10 +826,12 @@ var textFieldCoordinates by remember { mutableStateOf<androidx.compose.ui.layout
                 newValue
             }
 
-            val updatedFormatMap = updateFormatMapForEdit(previousText, limitedValue.text, formatMap)
+            val liveFormatMap = getLatestFormatMap()
+            val updatedFormatMap = updateFormatMapForEdit(previousText, limitedValue.text, liveFormatMap)
             onFormatMapChange(updatedFormatMap)
 
-            val updatedCharStyles = updateCharacterStylesForEdit(previousText, limitedValue.text, characterStyles)
+            val liveCharacterStyles = getLatestCharacterStyles()
+            val updatedCharStyles = updateCharacterStylesForEdit(previousText, limitedValue.text, liveCharacterStyles)
             onCharacterStylesChange(updatedCharStyles)
 
             previousText = limitedValue.text
@@ -1155,10 +1159,12 @@ fun ViewNoteScreen(
                         onFormatMapChange = { newMap ->
                             formatMap = newMap
                         },
+                        getLatestFormatMap = { formatMap },
                         characterStyles = characterStyles,
                         onCharacterStylesChange = { newStyles ->
                             characterStyles = newStyles
                         },
+                        getLatestCharacterStyles = { characterStyles },
                         currentLineIndex = currentLineIndex,
                         onCurrentLineIndexChange = { index ->
                             currentLineIndex = index
@@ -1183,15 +1189,24 @@ fun ViewNoteScreen(
                 animationSpec = tween(220), label = "actionContainerWidth"
             )
 
+
             // ── Bottom Overlays Container (moves up with keyboard) ────────────────
-            val offsetY = if (isKeyboardVisible) 16.dp else 0.dp
-            
+            // Cancel out the navigation bar's height from the IME inset, since the
+            // screen's content area is likely already shifted above the nav bar by
+            // an ancestor. Without this, 3-button nav double-counts the nav bar
+            // height (once from the ancestor, once baked into the IME inset here),
+            // causing the visible gap. Gesture nav has ~0 nav bar height, so this
+            // had no visible effect there — which is why it only showed up in 3-button mode.
+            val navBarHeightPx = WindowInsets.navigationBars.getBottom(density)
+            val imeBottomDp = with(density) {
+                (imeHeight - navBarHeightPx).coerceAtLeast(0).toDp()
+            }
+
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .imePadding()
-                    .offset(y = offsetY) // Only offset when keyboard is visible
+                    .padding(bottom = imeBottomDp)
             ) {
                 // Character limit notification (appears above toolbar)
                 androidx.compose.animation.AnimatedVisibility(
