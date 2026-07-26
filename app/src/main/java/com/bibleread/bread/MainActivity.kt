@@ -149,7 +149,6 @@ fun MainApp(dbReady: State<Boolean>) {
     var showViewNote by remember { mutableStateOf<NoteEntry?>(null) }
     var noteCallbacks by remember { mutableStateOf<NoteCallbacks?>(null) }
 
-    var splashDone by remember { mutableStateOf(false) }
     val isLoggedIn by remember { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -164,7 +163,7 @@ fun MainApp(dbReady: State<Boolean>) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             bottomBar = {
-                if (currentRoute != Screen.Splash.route && currentRoute != Screen.BookSelection.route && currentRoute != Screen.Appearance.route && currentRoute != Screen.NewNote.route && currentRoute != Screen.ViewNote.route) {
+                if (currentRoute != null && currentRoute != Screen.Splash.route && currentRoute != Screen.BookSelection.route && currentRoute != Screen.Appearance.route && currentRoute != Screen.NewNote.route && currentRoute != Screen.ViewNote.route) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -226,15 +225,26 @@ fun MainApp(dbReady: State<Boolean>) {
                     popExitTransition = { ExitTransition.None }
                 ) {
                     composable(Screen.Splash.route) {
-                        SplashScreen(onFinished = {
-                            splashDone = true
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        SplashScreen(
+                            isDbReady = isDbReady,
+                            onEnter = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                navController.navigate(Screen.Reader.route) {
+                                    popUpTo(Screen.Splash.route) { inclusive = true }
+                                }
+                            },
+                            onOpenVerse = { book, chapter ->
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                bibleVm.loadChapter(book, chapter)
+                                navController.navigate(Screen.Reader.route) {
+                                    popUpTo(Screen.Splash.route) { inclusive = true }
+                                }
                             }
-                            navController.navigate(Screen.Reader.route) {
-                                popUpTo(Screen.Splash.route) { inclusive = true }
-                            }
-                        })
+                        )
                     }
                     composable(Screen.Reader.route) {
                         BibleScreen(
@@ -319,43 +329,8 @@ fun MainApp(dbReady: State<Boolean>) {
                     composable(Screen.Community.route) { HomeScreen() }
                     composable(Screen.Chats.route)     { ChatsScreen() }
                 }
-
-                if (splashDone && !isDbReady) {
-                    BibleLoadingOverlay()
-                }
             }
         }
 
     } // end root Box
-}
-
-@Composable
-fun BibleLoadingOverlay() {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(48.dp))
-            Spacer(modifier = Modifier.height(24.dp))
-            Text("Loading Your Bible Data", color = Color.White.copy(alpha = alpha),
-                fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("This only happens once", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
-        }
-    }
 }

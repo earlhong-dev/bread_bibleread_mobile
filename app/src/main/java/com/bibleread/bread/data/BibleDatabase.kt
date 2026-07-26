@@ -30,6 +30,18 @@ interface VerseDao {
     @Query("SELECT * FROM verses WHERE book = :book AND chapter = :chapter ORDER BY verse ASC")
     suspend fun getChapter(book: String, chapter: Int): List<VerseEntity>
 
+    @Query("SELECT * FROM verses WHERE (book = :book OR book LIKE :bookPattern) AND chapter = :chapter AND verse >= :startVerse AND verse <= :endVerse ORDER BY verse ASC")
+    suspend fun getVerseRange(book: String, bookPattern: String, chapter: Int, startVerse: Int, endVerse: Int): List<VerseEntity>
+
+    @Query("SELECT COUNT(*) FROM verses WHERE book IN (:books)")
+    suspend fun getVerseCountFromBooks(books: List<String>): Int
+
+    @Query("SELECT * FROM verses WHERE book IN (:books) LIMIT 1 OFFSET :offset")
+    suspend fun getVerseFromBooksAtOffset(books: List<String>, offset: Int): VerseEntity?
+
+    @Query("SELECT * FROM verses ORDER BY RANDOM() LIMIT 1")
+    suspend fun getRandomVerse(): VerseEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(verses: List<VerseEntity>)
 
