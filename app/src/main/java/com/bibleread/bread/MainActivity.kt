@@ -214,7 +214,8 @@ fun MainApp(dbReady: State<Boolean>) {
                 }
             }
         ) { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
+            val isFullScreenRoute = currentRoute == null || currentRoute == Screen.Splash.route
+            Box(modifier = Modifier.padding(if (isFullScreenRoute) PaddingValues(0.dp) else innerPadding)) {
                 NavHost(
                     navController = navController,
                     startDestination = Screen.Splash.route,

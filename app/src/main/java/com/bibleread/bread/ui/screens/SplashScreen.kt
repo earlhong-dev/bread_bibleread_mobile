@@ -45,10 +45,32 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import android.app.Activity
 import com.bibleread.bread.data.BibleDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+
+@OptIn(ExperimentalTextApi::class)
+fun getInterFont(weightValue: Int): FontFamily {
+    val safeWeight = weightValue.coerceIn(100, 900)
+    return FontFamily(
+        Font(
+            resId = R.font.inter,
+            weight = FontWeight(safeWeight),
+            variationSettings = FontVariation.Settings(
+                FontVariation.weight(safeWeight)
+            )
+        )
+    )
+}
 
 // No auto-dismiss — stays until user taps Enter (once DB is ready)
 
@@ -97,11 +119,33 @@ fun SplashScreen(
     onOpenVerse: ((book: String, chapter: Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
+
+    // Make top system status bar icons dark/black for the yellow background
+    DisposableEffect(view) {
+        val window = (view.context as? Activity)?.window
+        if (window != null) {
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            val originalLightStatus = insetsController.isAppearanceLightStatusBars
+            insetsController.isAppearanceLightStatusBars = true
+
+            onDispose {
+                insetsController.isAppearanceLightStatusBars = originalLightStatus
+            }
+        } else {
+            onDispose { }
+        }
+    }
 
     var verseText by remember { mutableStateOf("") }
     var verseRef by remember { mutableStateOf("") }
     var targetBook by remember { mutableStateOf<String?>(null) }
     var targetChapter by remember { mutableStateOf<Int?>(null) }
+
+    // ── Numeric Font Weight Adjusters (100..900) ─────────────────────────────
+    // 100 = Thin, 300 = Light, 400 = Normal, 500 = Medium, 600 = SemiBold, 700 = Bold, 800 = ExtraBold, 900 = Black
+    var verseTextFontWeightValue by remember { mutableIntStateOf(700) } // Bible verse text weight (e.g. 600)
+    var verseRefFontWeightValue  by remember { mutableIntStateOf(850) } // Book reference weight (e.g. 700)
 
     val verseAlpha by animateFloatAsState(
         targetValue = if (verseText.isNotEmpty()) 1f else 0f,
@@ -205,6 +249,7 @@ fun SplashScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
                 .padding(horizontal = 32.dp)
                 .graphicsLayer { this.alpha = alpha }
         ) {
@@ -241,7 +286,7 @@ fun SplashScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Bible verse
             val verseInteractionSource = remember { MutableInteractionSource() }
@@ -271,13 +316,14 @@ fun SplashScreen(
                             onEnter()
                         }
                     }
-                    .padding(8.dp)
+                    .padding(horizontal = 20.dp, vertical = 5.dp)
             ) {
                 Text(
                     text = verseText,
                     color = Color.Black,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight(verseTextFontWeightValue),
+                    fontFamily = getInterFont(verseTextFontWeightValue),
                     textAlign = TextAlign.Center,
                     lineHeight = 20.sp
                 )
@@ -287,25 +333,10 @@ fun SplashScreen(
                 Text(
                     text = verseRef,
                     color = Color.Black,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 25.sp,
+                    fontWeight = FontWeight(verseRefFontWeightValue),
+                    fontFamily = getInterFont(verseRefFontWeightValue)
                 )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Heart + share icons
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                listOf("♥", "↗").forEach { icon ->
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .border(1.5.dp, Color.Black.copy(alpha = 0.6f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = icon, fontSize = 16.sp, color = Color.Black)
-                    }
-                }
             }
         }
     }
