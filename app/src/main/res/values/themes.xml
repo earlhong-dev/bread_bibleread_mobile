@@ -3,6 +3,7 @@
 
     <style name="Theme.Bread" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowSplashScreenBackground">#f8d134</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
     </style>
 
 </resources>

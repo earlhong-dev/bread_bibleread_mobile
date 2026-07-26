@@ -235,11 +235,12 @@ fun SplashScreen(
             contentAlignment = Alignment.TopCenter
         ) {
             Text(
-                text = "Enter",
+                text = "Read the Bible!",
                 color = Color(0xFFF8D134),
-                fontSize = 18.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
+                fontFamily = getInterFont(700),
+                letterSpacing = 0.5.sp,
                 modifier = Modifier.padding(top = 28.dp)
             )
         }
