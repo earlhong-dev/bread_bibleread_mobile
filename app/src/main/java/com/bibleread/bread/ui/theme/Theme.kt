@@ -77,8 +77,9 @@ fun BreadTheme(themeIndex: Int = 1, content: @Composable () -> Unit) {
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Set status bar background color matching theme background
-            window.statusBarColor = colorScheme.background.toArgb()
+            // Set status bar and navigation bar to transparent for edge-to-edge display
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
             
             // Set status bar icons: dark icons for Light (0) and Sepia (2) themes, light icons for Dark (1) theme
             val darkStatusIcons = themeIndex == 0 || themeIndex == 2

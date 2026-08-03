@@ -4,6 +4,9 @@
     <style name="Theme.Bread" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowSplashScreenBackground">#f8d134</item>
         <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
 </resources>

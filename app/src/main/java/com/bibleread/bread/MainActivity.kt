@@ -89,6 +89,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+
         lifecycleScope.launch(Dispatchers.IO) {
             parseAllPendingXmlFiles(applicationContext)
             val elapsed = SystemClock.elapsedRealtime() - t0
