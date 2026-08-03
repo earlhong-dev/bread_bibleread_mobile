@@ -126,11 +126,11 @@ private val RANDOM_DIALOGUES = listOf(
     "Kamusta ka?",
     "PRAISEEEEEEEEE!",
     "Have a blessed day!",
-    "Magpapatuloy tayo",
-    "Huwag ka matakot",
+    "Magpapatuloy tayo!",
+    "Huwag ka mangamba",
     "Pray tayo",
-    "Kalma, Sya na bahala sa'yo",
-    "Streak tayo",
+    "Kalma, S'ya na bahala sa'yo",
+    "Streak tayo!",
     "Nice one kapatid!"
 )
 
@@ -391,8 +391,13 @@ fun SplashScreen(
                         timeZone = java.util.TimeZone.getDefault()
                     }
                     val todayString = dateFormat.format(java.util.Date())
-                    val dateHash = kotlin.math.abs(todayString.hashCode())
-                    val offset = dateHash % count
+                    
+                    // SHA-256 avalanche hash ensures consecutive days pick completely random books & verses
+                    val md = java.security.MessageDigest.getInstance("SHA-256")
+                    val digest = md.digest(todayString.toByteArray(Charsets.UTF_8))
+                    val seed = java.nio.ByteBuffer.wrap(digest).long
+                    val offset = (kotlin.math.abs(seed) % count).toInt()
+                    
                     val selectedVerse = db.verseDao().getVerseFromBooksAtOffset(ALLOWED_BOOKS, offset)
                     if (selectedVerse != null) {
                         withContext(Dispatchers.Main) {
