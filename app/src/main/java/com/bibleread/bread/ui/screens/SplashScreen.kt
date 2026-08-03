@@ -330,6 +330,18 @@ fun SplashScreen(
     val buttonAnim = remember { Animatable(0f) }
     val bubbleAnim = remember { Animatable(0f) }
     val streakAnim = remember { Animatable(0f) }
+    val exitAnim = remember { Animatable(1f) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val handleExit = { action: () -> Unit ->
+        coroutineScope.launch {
+            exitAnim.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing)
+            )
+            action()
+        }
+    }
 
     LaunchedEffect(Unit) {
         // 1. Bread appears first: comes from bottom & eases in smoothly
@@ -410,6 +422,7 @@ fun SplashScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = exitAnim.value }
             .background(Color(0xFFF8D134)) // #f8d134
     ) {
         // ── Dark bottom panel ────────────────────────────────────────────────
@@ -517,7 +530,7 @@ fun SplashScreen(
                         interactionSource = bottomInteractionSource,
                         indication = null,
                         enabled = isDbReady,
-                        onClick = onEnter
+                        onClick = { handleExit { onEnter() } }
                     )
                     .padding(horizontal = 20.dp, vertical = 22.dp)
             ) {
@@ -646,10 +659,12 @@ fun SplashScreen(
                     ) {
                         val b = targetBook
                         val c = targetChapter
-                        if (b != null && c != null && onOpenVerse != null) {
-                            onOpenVerse(b, c)
-                        } else {
-                            onEnter()
+                        handleExit {
+                            if (b != null && c != null && onOpenVerse != null) {
+                                onOpenVerse(b, c)
+                            } else {
+                                onEnter()
+                            }
                         }
                     }
             ) {
