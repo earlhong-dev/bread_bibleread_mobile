@@ -137,6 +137,8 @@ private val RANDOM_DIALOGUES = listOf(
 private const val PREFS_NAME = "splash_prefs"
 private const val KEY_LAST_OPEN_MS = "last_open_ms"
 private const val KEY_MORNING_GREETED_DATE = "morning_greeted_date"
+private const val KEY_STREAK_COUNT = "streak_count"
+private const val KEY_STREAK_LAST_DATE = "streak_last_date"
 
 fun pickBubbleDialogue(context: android.content.Context): String {
     val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -166,6 +168,108 @@ fun pickBubbleDialogue(context: android.content.Context): String {
     // Otherwise pick randomly from pool
     return RANDOM_DIALOGUES.random()
 }
+
+fun getOrUpdateStreak(context: android.content.Context): Int {
+    val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).apply {
+        timeZone = java.util.TimeZone.getDefault()
+    }
+
+    val todayCalendar = java.util.Calendar.getInstance()
+    todayCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+    todayCalendar.set(java.util.Calendar.MINUTE, 0)
+    todayCalendar.set(java.util.Calendar.SECOND, 0)
+    todayCalendar.set(java.util.Calendar.MILLISECOND, 0)
+
+    val todayDateStr = sdf.format(todayCalendar.time)
+    val lastDateStr = prefs.getString(KEY_STREAK_LAST_DATE, null)
+    var streak = prefs.getInt(KEY_STREAK_COUNT, 0)
+
+    if (lastDateStr == null) {
+        // First time launch
+        streak = 1
+        prefs.edit()
+            .putInt(KEY_STREAK_COUNT, streak)
+            .putString(KEY_STREAK_LAST_DATE, todayDateStr)
+            .apply()
+    } else if (todayDateStr == lastDateStr) {
+        // Already opened today -> do nothing
+    } else {
+        val lastDate = try { sdf.parse(lastDateStr) } catch (e: Exception) { null }
+        if (lastDate != null) {
+            val lastCalendar = java.util.Calendar.getInstance()
+            lastCalendar.time = lastDate
+            lastCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            lastCalendar.set(java.util.Calendar.MINUTE, 0)
+            lastCalendar.set(java.util.Calendar.SECOND, 0)
+            lastCalendar.set(java.util.Calendar.MILLISECOND, 0)
+
+            // Add 1 day to last open date to check if today is consecutive
+            lastCalendar.add(java.util.Calendar.DAY_OF_MONTH, 1)
+            val expectedNextDateStr = sdf.format(lastCalendar.time)
+
+            if (todayDateStr == expectedNextDateStr) {
+                // Consecutive day open
+                streak += 1
+            } else {
+                // Missed 1 or more days -> reset to 1
+                streak = 1
+            }
+        } else {
+            streak = 1
+        }
+
+        prefs.edit()
+            .putInt(KEY_STREAK_COUNT, streak)
+            .putString(KEY_STREAK_LAST_DATE, todayDateStr)
+            .apply()
+    }
+
+    return streak
+}
+
+fun getSpiritualStatus(streak: Int): String {
+    return when {
+        streak in 0..2 -> "First Steps"
+        streak in 3..6 -> "Seeking God"
+        streak in 7..13 -> "Living the Word"
+        streak in 14..29 -> "Spiritually Healthy"
+        streak in 30..59 -> "Rooted in Christ"
+        else -> "Christ-Centered Life"
+    }
+}
+
+data class StatusColors(val text: Color, val bg: Color)
+
+fun getSpiritualStatusColors(streak: Int): StatusColors {
+    return when {
+        streak in 0..2 -> StatusColors(
+            text = Color(0xFF1F2937), // Dark Charcoal Grey
+            bg = Color(0xFFD1D5DB)   // Cool Grey
+        )
+        streak in 3..6 -> StatusColors(
+            text = Color(0xFF1E3A8A), // Dark Navy Blue
+            bg = Color(0xFF60A5FA)   // Vibrant Medium Blue
+        )
+        streak in 7..13 -> StatusColors(
+            text = Color(0xFF7F1D1D), // Dark Crimson Red
+            bg = Color(0xFFF87171)   // Vibrant Coral Red
+        )
+        streak in 14..29 -> StatusColors(
+            text = Color(0xFF7C2D12), // Dark Rust Orange
+            bg = Color(0xFFFB923C)   // Vibrant Warm Orange
+        )
+        streak in 30..59 -> StatusColors(
+            text = Color(0xFF064E3B), // Dark Forest Green
+            bg = Color(0xFF4ADE80)   // Vibrant Leaf Green
+        )
+        else -> StatusColors(
+            text = Color(0xFF4C1D95), // Dark Royal Violet
+            bg = Color(0xFFC084FC)   // Vibrant Violet
+        )
+    }
+}
+
 
 @Composable
 fun SplashScreen(
@@ -207,6 +311,9 @@ fun SplashScreen(
     // Pick bubble dialogue based on conditions (morning, welcome back, or random)
     val bubbleDialogue = remember { pickBubbleDialogue(context) }
 
+    // Calculate/update daily open streak count
+    val streakCount = remember { getOrUpdateStreak(context) }
+
     // ── Numeric Font Weight Adjusters (100..900) ─────────────────────────────
     // 100 = Thin, 300 = Light, 400 = Normal, 500 = Medium, 600 = SemiBold, 700 = Bold, 800 = ExtraBold, 900 = Black
     var verseTextFontWeightValue by remember { mutableIntStateOf(700) } // Bible verse text weight (e.g. 600)
@@ -222,6 +329,7 @@ fun SplashScreen(
     val verseAnim = remember { Animatable(0f) }
     val buttonAnim = remember { Animatable(0f) }
     val bubbleAnim = remember { Animatable(0f) }
+    val streakAnim = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
         // 1. Bread appears first: comes from bottom & eases in smoothly
@@ -252,6 +360,12 @@ fun SplashScreen(
         buttonAnim.animateTo(
             targetValue = 1f,
             animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
+        )
+
+        // 4. Streak indicator & status fade/pop in ONLY AFTER Read Bible button is in place
+        streakAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
         )
     }
 
@@ -322,43 +436,74 @@ fun SplashScreen(
                     translationY = (1f - buttonAnim.value) * 350f
                 }
         ) {
-            // Streak indicator above Read Bible button
+            // Streak indicator above Read Bible button (appears only after button transition finishes)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier
-                    .background(Color.White, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, bottom = 10.dp)
+                    .graphicsLayer {
+                        alpha = streakAnim.value
+                    }
             ) {
+                // Left side: flame + count + "Streak"
                 Icon(
                     painter = painterResource(id = R.drawable.ic_flame),
                     contentDescription = "Streak Flame",
                     tint = Color(0xFFFF6B00),
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(22.dp)
                 )
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(3.dp))
 
                 Text(
-                    text = "0",
+                    text = "$streakCount",
                     color = Color(0xFF1A1A1A),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = getInterFont(800)
                 )
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Text(
-                    text = "Day Streak",
+                    text = "Streak",
                     color = Color(0xFF1A1A1A),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = getInterFont(700)
                 )
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+
+                // Vertical separator between Streak and Spiritual Status
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(14.dp)
+                        .background(Color(0xFF1A1A1A).copy(alpha = 0.25f))
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                // Spiritual status pill — color-coded container with solid text
+                val statusColors = getSpiritualStatusColors(streakCount)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(statusColors.bg, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = getSpiritualStatus(streakCount),
+                        color = statusColors.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = getInterFont(700)
+                    )
+                }
+            }
 
             Box(
                 modifier = Modifier
@@ -520,16 +665,30 @@ fun SplashScreen(
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // Book Reference
-                Text(
-                    text = verseRef,
-                    color = Color(0xFF1A1A1A),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight(900),
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
-                )
+                // Book Reference + Line Separator (dynamically matched to text width)
+                Column(
+                    modifier = Modifier.width(IntrinsicSize.Max),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = verseRef,
+                        color = Color(0xFF1A1A1A),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight(900),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
+                    )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color(0xFF1A1A1A).copy(alpha = 0.2f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Daily Verse
                 Text(
