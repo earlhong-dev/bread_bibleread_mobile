@@ -42,6 +42,7 @@ import androidx.core.content.FileProvider
 import coil.compose.rememberAsyncImagePainter
 import com.bibleread.bread.R
 import com.bibleread.bread.data.BibleDatabase
+import com.bibleread.bread.notifications.DailyVerseScheduler
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,6 +67,8 @@ fun ProfileScreen(isLoggedIn: Boolean = false) {
 
 @Composable
 private fun ProfileSignInPrompt() {
+    val context = LocalContext.current
+
     Box(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
@@ -113,6 +116,19 @@ private fun ProfileSignInPrompt() {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Create Account", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Medium,
+                    fontSize = 15.sp, modifier = Modifier.padding(vertical = 4.dp))
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = { DailyVerseScheduler.showVerseNotification(context) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF8D134),
+                    contentColor = Color(0xFF111111)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Test Notification", fontWeight = FontWeight.Bold,
                     fontSize = 15.sp, modifier = Modifier.padding(vertical = 4.dp))
             }
         }
@@ -263,6 +279,9 @@ private fun ProfileContent() {
 
         SettingItem("Edit Profile")
         SettingItem("Notification Settings")
+        SettingItem("Test Notification", onClick = {
+            DailyVerseScheduler.showVerseNotification(context)
+        })
         SettingItem("Language")
         SettingItem("Theme")
 

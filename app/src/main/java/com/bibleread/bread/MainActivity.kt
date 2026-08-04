@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -40,6 +41,7 @@ import com.bibleread.bread.data.BibleDatabase
 import com.bibleread.bread.data.BibleXmlParser
 import com.bibleread.bread.data.DbExporter
 import com.bibleread.bread.data.TranslationManager
+import com.bibleread.bread.notifications.DailyVerseScheduler
 import com.bibleread.bread.ui.screens.*
 import com.bibleread.bread.ui.theme.BreadTheme
 import com.bibleread.bread.viewmodel.BibleViewModel
@@ -84,10 +86,31 @@ class MainActivity : ComponentActivity() {
     private val _dbReady = mutableStateOf(false)
     val dbReady: State<Boolean> = _dbReady
 
+    private lateinit var notificationPermissionLauncher: ActivityResultLauncher<String>
+    private lateinit var exactAlarmPermissionLauncher: ActivityResultLauncher<String>
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val t0 = SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                DailyVerseScheduler.scheduleDailyVerseAlarms(applicationContext)
+            }
+        }
+        exactAlarmPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                DailyVerseScheduler.scheduleDailyVerseAlarms(applicationContext)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            exactAlarmPermissionLauncher.launch(Manifest.permission.SCHEDULE_EXACT_ALARM)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes = window.attributes.apply {
@@ -103,6 +126,8 @@ class MainActivity : ComponentActivity() {
                 _dbReady.value = true
             }
         }
+
+        DailyVerseScheduler.scheduleDailyVerseAlarms(applicationContext)
 
         setContent {
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -157,9 +182,19 @@ fun MainApp(dbReady: State<Boolean>) {
 
     val isLoggedIn by remember { mutableStateOf(false) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { }
+    )
+    val exactAlarmPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted ->
+            if (granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                DailyVerseScheduler.scheduleDailyVerseAlarms(context.applicationContext)
+            }
+        }
     )
 
     val baseTabs = listOf(Screen.Reader, Screen.Search, Screen.Profile)
@@ -245,6 +280,9 @@ fun MainApp(dbReady: State<Boolean>) {
                             onOpenVerse = { book, chapter ->
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    exactAlarmPermissionLauncher.launch(Manifest.permission.SCHEDULE_EXACT_ALARM)
                                 }
                                 bibleVm.loadChapter(book, chapter)
                                 navController.navigate(Screen.Reader.route) {
