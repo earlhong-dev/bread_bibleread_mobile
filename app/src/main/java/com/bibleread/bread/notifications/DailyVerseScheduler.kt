@@ -24,7 +24,7 @@ object DailyVerseScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val timeZone = TimeZone.getDefault()
 
-        scheduleAlarm(context, alarmManager, 0, 0s, REQUEST_CODE_MIDNIGHT, timeZone)
+        scheduleAlarm(context, alarmManager, 0, 0, REQUEST_CODE_MIDNIGHT, timeZone)
         scheduleAlarm(context, alarmManager, 12, 0, REQUEST_CODE_NOON, timeZone)
     }
 
