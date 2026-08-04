@@ -454,7 +454,7 @@ fun SplashScreen(
                     translationY = (1f - buttonAnim.value) * 350f
                 }
         ) {
-            // Streak indicator above Read Bible button (appears only after button transition finishes)
+            // Streak indicator above Read Bible button (appears only after button transition finishess)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
