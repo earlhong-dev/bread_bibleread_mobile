@@ -20,6 +20,15 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.toArgb
+import android.graphics.BlurMaskFilter
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.Interaction
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +40,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -47,6 +58,13 @@ import com.bibleread.bread.ui.theme.BreadTheme
 import com.bibleread.bread.viewmodel.BibleViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+// Interaction source that swallows all interactions — suppresses Material3's built-in ripple on NavigationBarItem
+private class NoRippleInteractionSource : MutableInteractionSource {
+    override val interactions = kotlinx.coroutines.flow.MutableSharedFlow<Interaction>()
+    override suspend fun emit(interaction: Interaction) {}
+    override fun tryEmit(interaction: Interaction) = false
+}
 
 suspend fun parseAllPendingXmlFiles(context: android.content.Context) {
     val xmlFiles = try {
@@ -197,58 +215,115 @@ fun MainApp(dbReady: State<Boolean>) {
         }
     )
 
-    val baseTabs = listOf(Screen.Reader, Screen.Search, Screen.Profile)
-    val loggedInTabs = listOf(Screen.Reader, Screen.Search, Screen.Community, Screen.Chats, Screen.Profile)
-    val items = if (isLoggedIn) loggedInTabs else baseTabs
+    val items = listOf(
+        Screen.Reader,
+        Screen.Search,
+        Screen.Community,
+        Screen.Chats,
+        Screen.Profile
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             bottomBar = {
                 if (currentRoute != null && currentRoute != Screen.Splash.route && currentRoute != Screen.BookSelection.route && currentRoute != Screen.Appearance.route && currentRoute != Screen.NewNote.route && currentRoute != Screen.ViewNote.route) {
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
+                            .padding(horizontal = 28.dp, vertical = 16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        HorizontalDivider(
-                            modifier = Modifier.fillMaxWidth(),
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
-                        )
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            tonalElevation = 0.dp,
-                            windowInsets = WindowInsets(0.dp),
-                            modifier = Modifier.fillMaxWidth().height(55.dp)
-                        ) {
-                            items.forEach { screen ->
-                                NavigationBarItem(
-                                    icon = {
-                                        screen.icon?.let {
-                                            Icon(
-                                                painter = painterResource(id = it),
-                                                contentDescription = screen.label,
-                                                modifier = Modifier.size(27.dp)
-                                            )
-                                        }
-                                    },
-                                    selected = currentRoute == screen.route,
-                                    onClick = {
-                                        if (currentRoute != screen.route) {
-                                            navController.navigate(screen.route) {
-                                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
+                        val navBarColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f)
+
+                        Surface(
+                            tonalElevation = 4.dp,
+                            shadowElevation = 0.dp,
+                            shape = RoundedCornerShape(50.dp),
+                            color = navBarColor,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                                .drawBehind {
+                                    drawIntoCanvas { canvas ->
+                                        val paint = Paint().apply {
+                                            asFrameworkPaint().apply {
+                                                isAntiAlias = true
+                                                color = android.graphics.Color.TRANSPARENT
+                                                setShadowLayer(
+                                                    18f, 0f, 0f,
+                                                    android.graphics.Color.argb(80, 0, 0, 0)
+                                                )
                                             }
                                         }
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = MaterialTheme.colorScheme.onSurface,
-                                        unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                                        indicatorColor = Color.Transparent
+                                        val cornerRadius = size.height / 2f
+                                        canvas.drawRoundRect(
+                                            left = 0f,
+                                            top = 0f,
+                                            right = size.width,
+                                            bottom = size.height,
+                                            radiusX = cornerRadius,
+                                            radiusY = cornerRadius,
+                                            paint = paint
+                                        )
+                                    }
+                                }
+                        ) {
+                            NavigationBar(
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                tonalElevation = 0.dp,
+                                windowInsets = WindowInsets(0.dp),
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
+                            ) {
+                                items.forEach { screen ->
+                                    NavigationBarItem(
+                                        icon = {
+                                            screen.icon?.let {
+                                                val isSelected = currentRoute == screen.route
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(50.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(54.dp)
+                                                            .background(
+                                                                color = if (isSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else Color.Transparent,
+                                                                shape = CircleShape
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(id = it),
+                                                            contentDescription = screen.label,
+                                                            modifier = Modifier.size(24.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        selected = currentRoute == screen.route,
+                                        onClick = {
+                                            if (currentRoute != screen.route) {
+                                                navController.navigate(screen.route) {
+                                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        },
+                                        interactionSource = remember { NoRippleInteractionSource() },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                            indicatorColor = Color.Transparent,
+                                            selectedTextColor = Color.Transparent,
+                                            unselectedTextColor = Color.Transparent
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                     }
