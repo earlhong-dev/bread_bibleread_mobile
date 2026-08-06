@@ -396,7 +396,7 @@ fun MainApp(dbReady: State<Boolean>) {
                     .padding(horizontal = 28.dp, vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val navBarColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f)
+                val navBarColor = MaterialTheme.colorScheme.surfaceVariant
 
                 Surface(
                     tonalElevation = 4.dp,
@@ -413,8 +413,8 @@ fun MainApp(dbReady: State<Boolean>) {
                                         isAntiAlias = true
                                         color = android.graphics.Color.TRANSPARENT
                                         setShadowLayer(
-                                            18f, 0f, 0f,
-                                            android.graphics.Color.argb(80, 0, 0, 0)
+                                            8f, 0f, 2f,
+                                            android.graphics.Color.argb(120, 0, 0, 0)
                                         )
                                     }
                                 }
