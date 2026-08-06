@@ -183,7 +183,6 @@ object DailyVerseScheduler {
     private fun getAllowedBooks(): List<String> = listOf(
         "Mga Awit", "Awit", "Psalms",
         "Mga Kawikaan", "Kawikaan", "Proverbs",
-        "Isaias", "Isaiah",
         "Mga Taga Roma", "Mga Taga-Roma", "Roma", "Romans",
         "Mga Taga Filipos", "Mga Taga-Filipos", "Filipos", "Philippians",
         "Santiago", "James",

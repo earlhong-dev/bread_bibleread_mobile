@@ -69,6 +69,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 
 // ── Note model ────────────────────────────────────────────────────────────────
 data class NoteEntry(
@@ -523,8 +525,24 @@ fun JournalScreen(
         }
 
         // ── Plus FAB ──────────────────────────────────────────────────────────
-        Box(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 24.dp)
-            .size(52.dp).background(MaterialTheme.colorScheme.onBackground, CircleShape)
+        Box(modifier = Modifier.align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .padding(bottom = 92.dp)
+            .size(52.dp)
+            .drawBehind {
+                drawIntoCanvas { canvas ->
+                    val paint = androidx.compose.ui.graphics.Paint().apply {
+                        asFrameworkPaint().apply {
+                            isAntiAlias = true
+                            color = android.graphics.Color.TRANSPARENT
+                            setShadowLayer(8f, 0f, 2f, android.graphics.Color.argb(120, 0, 0, 0))
+                        }
+                    }
+                    val radius = size.minDimension / 2f
+                    canvas.drawCircle(center, radius, paint)
+                }
+            }
+            .background(MaterialTheme.colorScheme.onBackground, CircleShape)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 onOpenNewNote(callbacks)
             },

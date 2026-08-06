@@ -386,6 +386,25 @@ fun MainApp(dbReady: State<Boolean>) {
             composable(Screen.Chats.route)     { ChatsScreen() }
         }
 
+        // ── Gradient fade behind nav pill ─────────────────────────────────
+        if (showNavBar) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.6f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+            )
+        }
+
         // ── Floating nav pill ──────────────────────────────────────────────
         if (showNavBar) {
             Box(
@@ -521,5 +540,15 @@ fun MainApp(dbReady: State<Boolean>) {
             }
         }
 
+        // ── Bottom blocker — covers system nav bar area below the pill ─────
+        if (showNavBar) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                    .background(MaterialTheme.colorScheme.background)
+            )
+        }
     } // end root Box
 }
