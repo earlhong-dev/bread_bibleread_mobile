@@ -20,6 +20,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Paint
@@ -40,10 +41,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -55,6 +59,7 @@ import com.bibleread.bread.data.TranslationManager
 import com.bibleread.bread.notifications.DailyVerseScheduler
 import com.bibleread.bread.ui.screens.*
 import com.bibleread.bread.ui.theme.BreadTheme
+import com.bibleread.bread.ui.theme.LocalThemeIndex
 import com.bibleread.bread.viewmodel.BibleViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -223,89 +228,273 @@ fun MainApp(dbReady: State<Boolean>) {
         Screen.Profile
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            bottomBar = {
-                if (currentRoute != null && currentRoute != Screen.Splash.route && currentRoute != Screen.BookSelection.route && currentRoute != Screen.Appearance.route && currentRoute != Screen.NewNote.route && currentRoute != Screen.ViewNote.route) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 28.dp, vertical = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val navBarColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f)
+    // Nav bar is 64dp tall + 16dp vertical padding on each side = 96dp total footprint
+    // Screens pad their bottom content by this so nothing hides under the pill
+    val navBarBottomPadding = 96.dp
 
-                        Surface(
-                            tonalElevation = 4.dp,
-                            shadowElevation = 0.dp,
-                            shape = RoundedCornerShape(50.dp),
-                            color = navBarColor,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                .drawBehind {
-                                    drawIntoCanvas { canvas ->
-                                        val paint = Paint().apply {
-                                            asFrameworkPaint().apply {
-                                                isAntiAlias = true
-                                                color = android.graphics.Color.TRANSPARENT
-                                                setShadowLayer(
-                                                    18f, 0f, 0f,
-                                                    android.graphics.Color.argb(80, 0, 0, 0)
-                                                )
-                                            }
-                                        }
-                                        val cornerRadius = size.height / 2f
-                                        canvas.drawRoundRect(
-                                            left = 0f,
-                                            top = 0f,
-                                            right = size.width,
-                                            bottom = size.height,
-                                            radiusX = cornerRadius,
-                                            radiusY = cornerRadius,
-                                            paint = paint
+    val themeIndex = LocalThemeIndex.current
+    val view = androidx.compose.ui.platform.LocalView.current
+
+    // Re-apply status bar icon appearance on every route change so splash can't linger
+    SideEffect {
+        val window = (context as android.app.Activity).window
+        val isSplash = currentRoute == null || currentRoute == Screen.Splash.route
+        val lightIcons = if (isSplash) {
+            true // splash is yellow — always dark icons
+        } else {
+            themeIndex == 0 || themeIndex == 2 // light/sepia = dark icons, dark = light icons
+        }
+        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = lightIcons
+    }
+
+    val showNavBar = currentRoute != null &&
+        currentRoute != Screen.Splash.route &&
+        currentRoute != Screen.BookSelection.route &&
+        currentRoute != Screen.Appearance.route &&
+        currentRoute != Screen.NewNote.route &&
+        currentRoute != Screen.ViewNote.route
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+
+        // ── Content layer ──────────────────────────────────────────────────
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Splash.route,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (currentRoute != null && currentRoute != Screen.Splash.route)
+                        Modifier.statusBarsPadding()
+                    else
+                        Modifier
+                ),
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None }
+        ) {
+            composable(Screen.Splash.route) {
+                SplashScreen(
+                    isDbReady = isDbReady,
+                    onEnter = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        navController.navigate(Screen.Reader.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    },
+                    onOpenVerse = { book, chapter ->
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            exactAlarmPermissionLauncher.launch(Manifest.permission.SCHEDULE_EXACT_ALARM)
+                        }
+                        bibleVm.loadChapter(book, chapter)
+                        navController.navigate(Screen.Reader.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Screen.Reader.route) {
+                BibleScreen(
+                    vm = bibleVm,
+                    onOpenBookSelection = { onBookSelected ->
+                        bookSelectionCallback = onBookSelected
+                        navController.navigate(Screen.BookSelection.route)
+                    },
+                    onOpenAppearance = { navController.navigate(Screen.Appearance.route) }
+                )
+            }
+            composable(Screen.Search.route) {
+                JournalScreen(
+                    onOpenNewNote = { callbacks ->
+                        noteCallbacks = callbacks
+                        navController.navigate(Screen.NewNote.route)
+                    },
+                    onOpenViewNote = { note, callbacks ->
+                        noteCallbacks = callbacks
+                        showViewNote = note
+                        navController.navigate(Screen.ViewNote.route)
+                    }
+                )
+            }
+            composable(Screen.BookSelection.route) {
+                BookSelectionOverlay(
+                    onBookSelected = { book, chapter ->
+                        bookSelectionCallback?.invoke(book, chapter)
+                        bookSelectionCallback = null
+                        navController.popBackStack()
+                    },
+                    onClose = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Appearance.route) {
+                val fontFileLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument()
+                ) { uri -> if (uri != null) bibleVm.importCustomFont(uri) }
+                AppearanceSettingsOverlay(
+                    currentFontSize = bibleVm.fontSize,
+                    onFontSizeChange = { bibleVm.saveFontSize(it) },
+                    currentFontStyle = bibleVm.fontStyle,
+                    onFontStyleChange = { bibleVm.saveFontStyle(it) },
+                    customFonts = bibleVm.customFonts,
+                    selectedThemeIndex = bibleVm.selectedThemeIndex,
+                    onThemeChange = { bibleVm.saveThemeIndex(it) },
+                    onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
+                    onRemoveFont = { bibleVm.removeCustomFont(it) },
+                    onClose = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.NewNote.route) {
+                NewNoteScreen(
+                    onBack = { navController.popBackStack() },
+                    onSave = { title, body ->
+                        noteCallbacks?.onSaveNew?.invoke(title, body)
+                        navController.popBackStack()
+                    }
+                )
+            }
+            composable(Screen.ViewNote.route) {
+                showViewNote?.let { note ->
+                    ViewNoteScreen(
+                        note = note,
+                        onBack = {
+                            showViewNote = null
+                            navController.popBackStack()
+                        },
+                        onSaveEdit = { updated ->
+                            noteCallbacks?.onSaveEdit?.invoke(updated)
+                            showViewNote = updated
+                        },
+                        onDelete = {
+                            noteCallbacks?.onDelete?.invoke(note)
+                            showViewNote = null
+                            navController.popBackStack()
+                        }
+                    )
+                }
+            }
+            composable(Screen.Profile.route)   { ProfileScreen(isLoggedIn = isLoggedIn) }
+            composable(Screen.Community.route) { HomeScreen() }
+            composable(Screen.Chats.route)     { ChatsScreen() }
+        }
+
+        // ── Floating nav pill ──────────────────────────────────────────────
+        if (showNavBar) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 28.dp, vertical = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val navBarColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.96f)
+
+                Surface(
+                    tonalElevation = 4.dp,
+                    shadowElevation = 0.dp,
+                    shape = RoundedCornerShape(50.dp),
+                    color = navBarColor,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .drawBehind {
+                            drawIntoCanvas { canvas ->
+                                val paint = Paint().apply {
+                                    asFrameworkPaint().apply {
+                                        isAntiAlias = true
+                                        color = android.graphics.Color.TRANSPARENT
+                                        setShadowLayer(
+                                            18f, 0f, 0f,
+                                            android.graphics.Color.argb(80, 0, 0, 0)
                                         )
                                     }
                                 }
+                                val cornerRadius = size.height / 2f
+                                canvas.drawRoundRect(
+                                    left = 0f,
+                                    top = 0f,
+                                    right = size.width,
+                                    bottom = size.height,
+                                    radiusX = cornerRadius,
+                                    radiusY = cornerRadius,
+                                    paint = paint
+                                )
+                            }
+                        }
+                ) {
+                    val selectedIndex = items.indexOfFirst { it.route == currentRoute }
+                        .coerceAtLeast(0)
+
+                    var previousIndex by remember { mutableIntStateOf(selectedIndex) }
+                    val animatedIndex by animateFloatAsState(
+                        targetValue = selectedIndex.toFloat(),
+                        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+                        label = "navCircleSlide",
+                        finishedListener = { previousIndex = selectedIndex }
+                    )
+                    val prevIndexSnapshot = remember(selectedIndex) { previousIndex }
+
+                    val circleSizeDp = 52.dp
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+
+                    BoxWithConstraints(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 2.dp)
+                    ) {
+                        val totalWidthPx = with(density) { maxWidth.toPx() }
+                        val slotWidthPx = totalWidthPx / items.size
+                        val circleSizePx = with(density) { circleSizeDp.toPx() }
+                        val circleOffsetX = (animatedIndex * slotWidthPx + (slotWidthPx - circleSizePx) / 2f).toInt()
+
+                        // Sliding circle
+                        Box(
+                            modifier = Modifier
+                                .size(circleSizeDp)
+                                .offset { IntOffset(circleOffsetX, 0) }
+                                .align(Alignment.CenterStart)
+                                .background(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                    shape = CircleShape
+                                )
+                        )
+
+                        // Icons
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            NavigationBar(
-                                containerColor = Color.Transparent,
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                tonalElevation = 0.dp,
-                                windowInsets = WindowInsets(0.dp),
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
-                            ) {
-                                items.forEach { screen ->
-                                    NavigationBarItem(
-                                        icon = {
-                                            screen.icon?.let {
-                                                val isSelected = currentRoute == screen.route
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(50.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(54.dp)
-                                                            .background(
-                                                                color = if (isSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f) else Color.Transparent,
-                                                                shape = CircleShape
-                                                            ),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(id = it),
-                                                            contentDescription = screen.label,
-                                                            modifier = Modifier.size(24.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        selected = currentRoute == screen.route,
-                                        onClick = {
+                            items.forEachIndexed { index, screen ->
+                                val iconAlpha = when (index) {
+                                    selectedIndex -> {
+                                        val proximity = (1f - kotlin.math.abs(animatedIndex - index)).coerceIn(0f, 1f)
+                                        androidx.compose.ui.util.lerp(0.45f, 1f, proximity)
+                                    }
+                                    prevIndexSnapshot -> {
+                                        val proximity = (1f - kotlin.math.abs(animatedIndex - index)).coerceIn(0f, 1f)
+                                        androidx.compose.ui.util.lerp(0.45f, 1f, proximity)
+                                    }
+                                    else -> 0.45f
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable(
+                                            interactionSource = remember { NoRippleInteractionSource() },
+                                            indication = null
+                                        ) {
                                             if (currentRoute != screen.route) {
                                                 navController.navigate(screen.route) {
                                                     popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -314,140 +503,20 @@ fun MainApp(dbReady: State<Boolean>) {
                                                 }
                                             }
                                         },
-                                        interactionSource = remember { NoRippleInteractionSource() },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = MaterialTheme.colorScheme.onSurface,
-                                            unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                                            indicatorColor = Color.Transparent,
-                                            selectedTextColor = Color.Transparent,
-                                            unselectedTextColor = Color.Transparent
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    screen.icon?.let {
+                                        Icon(
+                                            painter = painterResource(id = it),
+                                            contentDescription = screen.label,
+                                            modifier = Modifier.size(24.dp),
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = iconAlpha)
                                         )
-                                    )
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            }
-        ) { innerPadding ->
-            val isFullScreenRoute = currentRoute == null || currentRoute == Screen.Splash.route
-            Box(modifier = Modifier.padding(if (isFullScreenRoute) PaddingValues(0.dp) else innerPadding)) {
-                NavHost(
-                    navController = navController,
-                    startDestination = Screen.Splash.route,
-                    modifier = Modifier.fillMaxSize(),
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { EnterTransition.None },
-                    popExitTransition = { ExitTransition.None }
-                ) {
-                    composable(Screen.Splash.route) {
-                        SplashScreen(
-                            isDbReady = isDbReady,
-                            onEnter = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                }
-                                navController.navigate(Screen.Reader.route) {
-                                    popUpTo(Screen.Splash.route) { inclusive = true }
-                                }
-                            },
-                            onOpenVerse = { book, chapter ->
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                }
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                    exactAlarmPermissionLauncher.launch(Manifest.permission.SCHEDULE_EXACT_ALARM)
-                                }
-                                bibleVm.loadChapter(book, chapter)
-                                navController.navigate(Screen.Reader.route) {
-                                    popUpTo(Screen.Splash.route) { inclusive = true }
-                                }
-                            }
-                        )
-                    }
-                    composable(Screen.Reader.route) {
-                        BibleScreen(
-                            vm = bibleVm,
-                            onOpenBookSelection = { onBookSelected ->
-                                bookSelectionCallback = onBookSelected
-                                navController.navigate(Screen.BookSelection.route)
-                            },
-                            onOpenAppearance = { navController.navigate(Screen.Appearance.route) }
-                        )
-                    }
-                    composable(Screen.Search.route) {
-                        JournalScreen(
-                            onOpenNewNote = { callbacks ->
-                                noteCallbacks = callbacks
-                                navController.navigate(Screen.NewNote.route)
-                            },
-                            onOpenViewNote = { note, callbacks ->
-                                noteCallbacks = callbacks
-                                showViewNote = note
-                                navController.navigate(Screen.ViewNote.route)
-                            }
-                        )
-                    }
-                    composable(Screen.BookSelection.route) {
-                        BookSelectionOverlay(
-                            onBookSelected = { book, chapter ->
-                                bookSelectionCallback?.invoke(book, chapter)
-                                bookSelectionCallback = null
-                                navController.popBackStack()
-                            },
-                            onClose = { navController.popBackStack() }
-                        )
-                    }
-                    composable(Screen.Appearance.route) {
-                        val fontFileLauncher = rememberLauncherForActivityResult(
-                            contract = ActivityResultContracts.OpenDocument()
-                        ) { uri -> if (uri != null) bibleVm.importCustomFont(uri) }
-                        AppearanceSettingsOverlay(
-                            currentFontSize = bibleVm.fontSize,
-                            onFontSizeChange = { bibleVm.saveFontSize(it) },
-                            currentFontStyle = bibleVm.fontStyle,
-                            onFontStyleChange = { bibleVm.saveFontStyle(it) },
-                            customFonts = bibleVm.customFonts,
-                            selectedThemeIndex = bibleVm.selectedThemeIndex,
-                            onThemeChange = { bibleVm.saveThemeIndex(it) },
-                            onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
-                            onRemoveFont = { bibleVm.removeCustomFont(it) },
-                            onClose = { navController.popBackStack() }
-                        )
-                    }
-                    composable(Screen.NewNote.route) {
-                        NewNoteScreen(
-                            onBack = { navController.popBackStack() },
-                            onSave = { title, body ->
-                                noteCallbacks?.onSaveNew?.invoke(title, body)
-                                navController.popBackStack()
-                            }
-                        )
-                    }
-                    composable(Screen.ViewNote.route) {
-                        showViewNote?.let { note ->
-                            ViewNoteScreen(
-                                note = note,
-                                onBack = {
-                                    showViewNote = null
-                                    navController.popBackStack()
-                                },
-                                onSaveEdit = { updated ->
-                                    noteCallbacks?.onSaveEdit?.invoke(updated)
-                                    showViewNote = updated
-                                },
-                                onDelete = {
-                                    noteCallbacks?.onDelete?.invoke(note)
-                                    showViewNote = null
-                                    navController.popBackStack()
-                                }
-                            )
-                        }
-                    }
-                    composable(Screen.Profile.route)   { ProfileScreen(isLoggedIn = isLoggedIn) }
-                    composable(Screen.Community.route) { HomeScreen() }
-                    composable(Screen.Chats.route)     { ChatsScreen() }
                 }
             }
         }

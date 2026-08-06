@@ -25,8 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -84,7 +83,6 @@ fun getInterFont(weightValue: Int): FontFamily {
 private val ALLOWED_BOOKS = listOf(
     "Mga Awit", "Awit", "Psalms",
     "Mga Kawikaan", "Kawikaan", "Proverbs",
-    "Isaias", "Isaiah",
     "Mga Taga Roma", "Mga Taga-Roma", "Roma", "Romans",
     "Mga Taga Filipos", "Mga Taga-Filipos", "Filipos", "Philippians",
     "Santiago", "James",
@@ -281,25 +279,15 @@ fun SplashScreen(
     val view = LocalView.current
 
     // Make top system status bar icons dark/black for the yellow background & ensure transparent system bars
-    DisposableEffect(view) {
+    DisposableEffect(Unit) {
         val window = (view.context as? Activity)?.window
         if (window != null) {
-            val insetsController = WindowCompat.getInsetsController(window, view)
-            val originalLightStatus = insetsController.isAppearanceLightStatusBars
-            val originalStatusBarColor = window.statusBarColor
-            val originalNavBarColor = window.navigationBarColor
-
-            insetsController.isAppearanceLightStatusBars = true
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
-
-            onDispose {
-                insetsController.isAppearanceLightStatusBars = originalLightStatus
-                window.statusBarColor = originalStatusBarColor
-                window.navigationBarColor = originalNavBarColor
-            }
-        } else {
-            onDispose { }
+        }
+        onDispose {
+            // BreadTheme's SideEffect will reassert the correct value on next recomposition
         }
     }
 
