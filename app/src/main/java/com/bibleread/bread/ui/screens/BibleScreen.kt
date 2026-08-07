@@ -15,6 +15,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -40,6 +42,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -250,75 +253,132 @@ fun BibleScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(Color(vm.headerColorInt.toLong() or 0xFF000000L))
         ) {
+            // Determine if header color is light so we can use dark content on it
+            val headerColor = Color(vm.headerColorInt.toLong() or 0xFF000000L)
+            val headerIsLight = run {
+                val r = android.graphics.Color.red(vm.headerColorInt) / 255f
+                val g = android.graphics.Color.green(vm.headerColorInt) / 255f
+                val b = android.graphics.Color.blue(vm.headerColorInt) / 255f
+                (0.299f * r + 0.587f * g + 0.114f * b) > 0.5f
+            }
+            val headerContentColor = if (headerIsLight) Color(0xFF1A1A1A) else Color.White
+            val headerContentAlpha = if (headerIsLight) Color(0xFF1A1A1A).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f)
+            val buttonBg = if (headerIsLight) Color.Black else Color.White.copy(alpha = 0.15f)
+            val buttonIcon = if (headerIsLight) Color.White else Color.White
 
-            // ── Header ───────────────────────────────────────────────────────
+            // ── Header card ──────────────────────────────────────────────────
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 20.dp, bottom = 18.dp)
-                    .zIndex(1f)
-                    .background(MaterialTheme.colorScheme.background)
-                    .graphicsLayer { alpha = headerAlpha },
+                modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                Box(
+                Surface(
+                    shape = RectangleShape,
+                    color = Color.Transparent,
+                    tonalElevation = 0.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 56.dp),
-                    contentAlignment = Alignment.Center
+                        .background(color = Color(vm.headerColorInt.toLong() or 0xFF000000L))
                 ) {
-                    Text(
-                        text = selectedBook,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontFamily = currentFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                        maxLines = 1,
-                        fontSize = 20.sp,
-                        softWrap = false,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // ── Button row ────────────────────────────────────────
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (!hasSelection) onOpenBookSelection { book, chapter ->
-                                requestChapter(book, chapter)
+                            // Left: book + search buttons
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(buttonBg, CircleShape)
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            if (!hasSelection) onOpenBookSelection { book, chapter ->
+                                                requestChapter(book, chapter)
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_book_open),
+                                        contentDescription = "Book selection",
+                                        tint = buttonIcon,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(buttonBg, CircleShape)
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) { /* search action */ },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_search),
+                                        contentDescription = "Search",
+                                        tint = buttonIcon,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            // Right: settings button
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(buttonBg, CircleShape)
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) { onOpenAppearance() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_settings2),
+                                    contentDescription = "Settings",
+                                    tint = buttonIcon,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
-                    )
 
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showChapterLabel,
-                        enter = slideInVertically(initialOffsetY = { it / 4 }, animationSpec = tween(160)),
-                        exit = slideOutVertically(targetOffsetY = { it / 4 }, animationSpec = tween(120)),
-                        modifier = Modifier.align(Alignment.Center).offset(y = 20.dp)
-                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // ── Book name + chapter below buttons ─────────────────
                         Text(
-                            text = "Chapter $displayedChapterLabel",
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            text = selectedBook,
+                            color = headerContentColor,
                             fontFamily = currentFontFamily,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 22.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Chapter $targetChapter",
+                            color = headerContentAlpha,
+                            fontFamily = currentFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
-                }
-
-                // Settings icon — right
-                IconButton(
-                    onClick = { onOpenAppearance() },
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 14.dp)
-                        .size(32.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_settings2),
-                        contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                        modifier = Modifier.size(18.dp)
-                    )
                 }
             }
 
@@ -328,7 +388,14 @@ fun BibleScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .padding(vertical = 4.dp)
             ) {
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.fillMaxSize()
+                ) {
 
             // ── Content ───────────────────────────────────────────────────────
             when (val state = uiState) {
@@ -359,7 +426,7 @@ fun BibleScreen(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 36.dp)
+                            .padding(horizontal = 20.dp)
                             .graphicsLayer { alpha = contentAlpha }
                             .pointerInput(hasSelection) {
                                 if (!hasSelection) {
@@ -387,21 +454,7 @@ fun BibleScreen(
                     ) {
                         versesByChapter.forEach { (chapter, verses) ->
                             item(key = "$selectedBook-$chapter-header") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 0.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = chapter.toString(),
-                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-                                        fontFamily = currentFontFamily,
-                                        fontSize = (fontSize * 3.55f).sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 2.sp
-                                    )
-                                }
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
                             items(
                                 verses,
@@ -528,6 +581,7 @@ fun BibleScreen(
                 }
             }
 
+                } // end Surface
         }
     }
 
@@ -1086,6 +1140,8 @@ fun AppearanceSettingsOverlay(
     customFonts: List<File> = emptyList(),
     selectedThemeIndex: Int,
     onThemeChange: (Int) -> Unit,
+    headerColorInt: Int = 0xFF2D6A4F.toInt(),
+    onHeaderColorChange: (Int) -> Unit = {},
     onAddFont: () -> Unit = {},
     onRemoveFont: (String) -> Unit = {},
     onClose: () -> Unit
@@ -1460,6 +1516,64 @@ fun AppearanceSettingsOverlay(
                                 color = if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                 fontSize = 14.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Header Color ──────────────────────────────────────────────────
+            Text(
+                text = "Header Color",
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val headerPresets = listOf(
+                0xFF2D6A4F.toInt() to "Green",
+                0xFFF8D134.toInt() to "Yellow",
+                0xFF1A1A2E.toInt() to "Navy",
+                0xFFB22222.toInt() to "Red",
+                0xFF4A4A8A.toInt() to "Purple",
+                0xFF1A1A1A.toInt() to "Black",
+                0xFFFFFFFF.toInt() to "White",
+                0xFF4A90D9.toInt() to "Blue",
+            )
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(headerPresets.size) { index ->
+                    val (colorInt, colorName) = headerPresets[index]
+                    val isSelected = headerColorInt == colorInt
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color(colorInt.toLong() or 0xFF000000L), CircleShape)
+                            .then(
+                                if (isSelected) Modifier.border(
+                                    2.5.dp,
+                                    MaterialTheme.colorScheme.onBackground,
+                                    CircleShape
+                                ) else Modifier
+                            )
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) { onHeaderColorChange(colorInt) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check_lucide),
+                                contentDescription = null,
+                                tint = if (colorInt == 0xFFFFFFFF.toInt()) Color.Black else Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }

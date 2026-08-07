@@ -86,6 +86,15 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putInt("theme_index", index).apply()
     }
 
+    // Header color (ARGB int), default is green #2D6A4F
+    var headerColorInt by mutableStateOf(prefs.getInt("header_color", 0xFF2D6A4F.toInt()))
+        private set
+
+    fun saveHeaderColor(colorInt: Int) {
+        headerColorInt = colorInt
+        prefs.edit().putInt("header_color", colorInt).apply()
+    }
+
     // Persisted selected highlight color
     val selectedHighlightColor = mutableStateOf<Color?>(
         if (prefs.contains("last_color")) Color(prefs.getInt("last_color", 0)) else null

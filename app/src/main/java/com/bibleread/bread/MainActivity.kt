@@ -240,9 +240,15 @@ fun MainApp(dbReady: State<Boolean>) {
         val window = (context as android.app.Activity).window
         val isSplash = currentRoute == null || currentRoute == Screen.Splash.route
         val lightIcons = if (isSplash) {
-            true // splash is yellow — always dark icons
+            true
+        } else if (currentRoute == Screen.Reader.route) {
+            // Use dark icons if header color is light
+            val r = android.graphics.Color.red(bibleVm.headerColorInt) / 255f
+            val g = android.graphics.Color.green(bibleVm.headerColorInt) / 255f
+            val b = android.graphics.Color.blue(bibleVm.headerColorInt) / 255f
+            (0.299f * r + 0.587f * g + 0.114f * b) > 0.5f
         } else {
-            themeIndex == 0 || themeIndex == 2 // light/sepia = dark icons, dark = light icons
+            themeIndex == 0 || themeIndex == 2
         }
         WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = lightIcons
     }
@@ -257,7 +263,12 @@ fun MainApp(dbReady: State<Boolean>) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                if (currentRoute == Screen.Reader.route)
+                    Color(bibleVm.headerColorInt.toLong() or 0xFF000000L)
+                else
+                    MaterialTheme.colorScheme.background
+            )
     ) {
 
         // ── Content layer ──────────────────────────────────────────────────
@@ -267,7 +278,9 @@ fun MainApp(dbReady: State<Boolean>) {
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (currentRoute != null && currentRoute != Screen.Splash.route)
+                    if (currentRoute != null &&
+                        currentRoute != Screen.Splash.route &&
+                        currentRoute != Screen.Reader.route)
                         Modifier.statusBarsPadding()
                     else
                         Modifier
@@ -347,6 +360,8 @@ fun MainApp(dbReady: State<Boolean>) {
                     customFonts = bibleVm.customFonts,
                     selectedThemeIndex = bibleVm.selectedThemeIndex,
                     onThemeChange = { bibleVm.saveThemeIndex(it) },
+                    headerColorInt = bibleVm.headerColorInt,
+                    onHeaderColorChange = { bibleVm.saveHeaderColor(it) },
                     onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
                     onRemoveFont = { bibleVm.removeCustomFont(it) },
                     onClose = { navController.popBackStack() }
@@ -415,7 +430,10 @@ fun MainApp(dbReady: State<Boolean>) {
                     .padding(horizontal = 28.dp, vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val navBarColor = MaterialTheme.colorScheme.surfaceVariant
+                val navBarColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 1f).let {
+                    // Ensure the pill is always visibly distinct from the background
+                    androidx.compose.ui.graphics.lerp(it, Color.White, 0.08f)
+                }
 
                 Surface(
                     tonalElevation = 4.dp,
@@ -465,6 +483,15 @@ fun MainApp(dbReady: State<Boolean>) {
                     val circleSizeDp = 52.dp
                     val density = androidx.compose.ui.platform.LocalDensity.current
 
+                    // Icon color that's visible on the circle background
+                    val circleIsLight = run {
+                        val r = android.graphics.Color.red(bibleVm.headerColorInt) / 255f
+                        val g = android.graphics.Color.green(bibleVm.headerColorInt) / 255f
+                        val b = android.graphics.Color.blue(bibleVm.headerColorInt) / 255f
+                        (0.299f * r + 0.587f * g + 0.114f * b) > 0.5f
+                    }
+                    val iconOnCircle = if (circleIsLight) Color(0xFF1A1A1A) else Color.White
+
                     BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxSize()
@@ -482,7 +509,7 @@ fun MainApp(dbReady: State<Boolean>) {
                                 .offset { IntOffset(circleOffsetX, 0) }
                                 .align(Alignment.CenterStart)
                                 .background(
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                    color = Color(bibleVm.headerColorInt.toLong() or 0xFF000000L),
                                     shape = CircleShape
                                 )
                         )
@@ -505,6 +532,14 @@ fun MainApp(dbReady: State<Boolean>) {
                                     }
                                     else -> 0.45f
                                 }
+                                // Blend icon color: unselected uses theme color, selected uses iconOnCircle
+                                val proximity = (1f - kotlin.math.abs(animatedIndex - index)).coerceIn(0f, 1f)
+                                val baseColor = MaterialTheme.colorScheme.onSurface
+                                val iconTint = androidx.compose.ui.graphics.lerp(
+                                    baseColor.copy(alpha = 0.45f),
+                                    iconOnCircle,
+                                    proximity
+                                )
 
                                 Box(
                                     modifier = Modifier
@@ -529,7 +564,10 @@ fun MainApp(dbReady: State<Boolean>) {
                                             painter = painterResource(id = it),
                                             contentDescription = screen.label,
                                             modifier = Modifier.size(24.dp),
-                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = iconAlpha)
+                                            tint = if (index == selectedIndex || index == prevIndexSnapshot)
+                                                iconTint
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                                         )
                                     }
                                 }
