@@ -248,7 +248,7 @@ fun MainApp(dbReady: State<Boolean>) {
             val b = android.graphics.Color.blue(bibleVm.headerColorInt) / 255f
             (0.299f * r + 0.587f * g + 0.114f * b) > 0.5f
         } else {
-            themeIndex == 0 || themeIndex == 2
+            themeIndex == 0
         }
         WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = lightIcons
     }
@@ -431,8 +431,9 @@ fun MainApp(dbReady: State<Boolean>) {
                 contentAlignment = Alignment.Center
             ) {
                 val navBarColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 1f).let {
-                    // Ensure the pill is always visibly distinct from the background
-                    androidx.compose.ui.graphics.lerp(it, Color.White, 0.08f)
+                    // Light mode: darken the pill; dark mode: lighten it — both stay distinct from background
+                    val blendTarget = if (themeIndex == 0) Color.Black else Color.White
+                    androidx.compose.ui.graphics.lerp(it, blendTarget, 0.08f)
                 }
 
                 Surface(
@@ -483,14 +484,9 @@ fun MainApp(dbReady: State<Boolean>) {
                     val circleSizeDp = 52.dp
                     val density = androidx.compose.ui.platform.LocalDensity.current
 
-                    // Icon color that's visible on the circle background
-                    val circleIsLight = run {
-                        val r = android.graphics.Color.red(bibleVm.headerColorInt) / 255f
-                        val g = android.graphics.Color.green(bibleVm.headerColorInt) / 255f
-                        val b = android.graphics.Color.blue(bibleVm.headerColorInt) / 255f
-                        (0.299f * r + 0.587f * g + 0.114f * b) > 0.5f
-                    }
-                    val iconOnCircle = if (circleIsLight) Color(0xFF1A1A1A) else Color.White
+                    // Icon color: unselected = theme, selected = white
+                    val circleIsLight = false
+                    val iconOnCircle = Color.White
 
                     BoxWithConstraints(
                         modifier = Modifier

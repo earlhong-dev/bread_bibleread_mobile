@@ -257,16 +257,11 @@ fun BibleScreen(
         ) {
             // Determine if header color is light so we can use dark content on it
             val headerColor = Color(vm.headerColorInt.toLong() or 0xFF000000L)
-            val headerIsLight = run {
-                val r = android.graphics.Color.red(vm.headerColorInt) / 255f
-                val g = android.graphics.Color.green(vm.headerColorInt) / 255f
-                val b = android.graphics.Color.blue(vm.headerColorInt) / 255f
-                (0.299f * r + 0.587f * g + 0.114f * b) > 0.5f
-            }
-            val headerContentColor = if (headerIsLight) Color(0xFF1A1A1A) else Color.White
-            val headerContentAlpha = if (headerIsLight) Color(0xFF1A1A1A).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f)
-            val buttonBg = if (headerIsLight) Color.Black else Color.White.copy(alpha = 0.15f)
-            val buttonIcon = if (headerIsLight) Color.White else Color.White
+            val isYellow = vm.headerColorInt == 0xFFF8D134.toInt()
+            val headerContentColor = if (isYellow) Color(0xFF1A1A1A) else Color.White
+            val headerContentAlpha = if (isYellow) Color(0xFF1A1A1A).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f)
+            val buttonBg = MaterialTheme.colorScheme.background
+            val buttonIcon = MaterialTheme.colorScheme.onBackground
 
             // ── Header card ──────────────────────────────────────────────────
             Box(
@@ -1185,6 +1180,7 @@ fun AppearanceSettingsOverlay(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(
@@ -1443,7 +1439,7 @@ fun AppearanceSettingsOverlay(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Theme section header
+            // ── Theme (Dark Mode toggle + color picker) ───────────────────────
             Text(
                 text = "Theme",
                 color = MaterialTheme.colorScheme.onBackground,
@@ -1452,129 +1448,197 @@ fun AppearanceSettingsOverlay(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Defined themes for selection
-            val themes = listOf(
-                Triple("Light", Color.White, Color.Black),
-                Triple("Dark", Color(0xFF1E1E1E), Color(0xFFE0E0E0)),
-                Triple("Sepia", Color(0xFFF4ECD8), Color(0xFF5B4636))
-            )
+            // ── Color Picker ──────────────────────────────────────────────────
+            val lighterPalette = remember {
+                listOf(
+                    0xFF5DC494.toInt(),
+                    0xFF6AAFC4.toInt(),
+                    0xFF9E8EC8.toInt(),
+                    0xFFD98A8A.toInt(),
+                    0xFFD4886A.toInt()
+                )
+            }
+            val defaultPalette = remember {
+                listOf(
+                    0xFF2E6A50.toInt(),
+                    0xFF547A86.toInt(),
+                    0xFF81758F.toInt(),
+                    0xFFA97878.toInt(),
+                    0xFFB4775D.toInt()
+                )
+            }
+            val darkerPalette = remember {
+                listOf(
+                    0xFF18382A.toInt(),
+                    0xFF38525A.toInt(),
+                    0xFF5E5468.toInt(),
+                    0xFF855555.toInt(),
+                    0xFF8A5640.toInt()
+                )
+            }
 
-            LazyRow(
+            val yellowInt = 0xFFF8D134.toInt()
+
+            // Yellow is standalone — only update palette tab when a palette color is selected
+            var selectedPaletteTab by remember {
+                val tab = when {
+                    lighterPalette.contains(headerColorInt) -> 0
+                    darkerPalette.contains(headerColorInt) -> 2
+                    else -> 1
+                }
+                mutableStateOf(tab)
+            }
+            val activePalette = when (selectedPaletteTab) {
+                0 -> lighterPalette
+                2 -> darkerPalette
+                else -> defaultPalette
+            }
+
+            // Top row: Dark Mode toggle (left) + Switch Palette (right)
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                items(themes.size) { index ->
-                    val (themeName, bgColor, textColor) = themes[index]
-                    val isSelected = selectedThemeIndex == index
-                    Surface(
-                        onClick = { onThemeChange(index) },
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.5.dp,
-                            if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f)
-                        ),
-                        modifier = Modifier.width(100.dp)
+                // Dark mode label + toggle
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { onThemeChange(if (selectedThemeIndex == 1) 0 else 1) }
+                ) {
+                    Text(
+                        text = "Dark Mode",
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    val isDark = selectedThemeIndex == 1
+                    Box(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(26.dp)
+                            .background(
+                                if (isDark) MaterialTheme.colorScheme.onBackground
+                                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
+                                RoundedCornerShape(13.dp)
+                            ),
+                        contentAlignment = if (isDark) Alignment.CenterEnd else Alignment.CenterStart
                     ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            // Mini mockup box representing the theme layout
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(55.dp)
-                                    .background(bgColor, RoundedCornerShape(6.dp))
-                                    .padding(8.dp)
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    // 3 mockup text lines
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth(0.9f)
-                                            .height(3.dp)
-                                            .background(textColor.copy(alpha = 0.8f))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth(0.75f)
-                                            .height(3.dp)
-                                            .background(textColor.copy(alpha = 0.8f))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth(0.5f)
-                                            .height(3.dp)
-                                            .background(textColor.copy(alpha = 0.5f))
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = themeName,
-                                color = if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .padding(3.dp)
+                                .size(20.dp)
+                                .background(
+                                    if (isDark) MaterialTheme.colorScheme.background else Color.White,
+                                    CircleShape
+                                )
+                        )
                     }
+                }
+
+                // Switch Palette button
+                Box(
+                    modifier = Modifier
+                        .background(
+                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
+                            RoundedCornerShape(20.dp)
+                        )
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { selectedPaletteTab = (selectedPaletteTab + 1) % 3 }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Switch Palette",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── Header Color ──────────────────────────────────────────────────
-            Text(
-                text = "Header Color",
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
             Spacer(modifier = Modifier.height(12.dp))
 
-            val headerPresets = listOf(
-                0xFF2D6A4F.toInt() to "Green",
-                0xFFF8D134.toInt() to "Yellow",
-                0xFF1A1A2E.toInt() to "Navy",
-                0xFFB22222.toInt() to "Red",
-                0xFF4A4A8A.toInt() to "Purple",
-                0xFF1A1A1A.toInt() to "Black",
-                0xFFFFFFFF.toInt() to "White",
-                0xFF4A90D9.toInt() to "Blue",
-            )
-
-            LazyRow(
+            // Swatch row: fixed yellow | separator | rotating palette
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(headerPresets.size) { index ->
-                    val (colorInt, colorName) = headerPresets[index]
-                    val isSelected = headerColorInt == colorInt
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(Color(colorInt.toLong() or 0xFF000000L), CircleShape)
-                            .then(
-                                if (isSelected) Modifier.border(
-                                    2.5.dp,
-                                    MaterialTheme.colorScheme.onBackground,
-                                    CircleShape
-                                ) else Modifier
-                            )
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null
-                            ) { onHeaderColorChange(colorInt) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isSelected) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_check_lucide),
-                                contentDescription = null,
-                                tint = if (colorInt == 0xFFFFFFFF.toInt()) Color.Black else Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
+                // Fixed yellow swatch — independent of palette
+                val yellowSelected = headerColorInt == yellowInt
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(Color(0xFFF8D134), CircleShape)
+                        .then(
+                            if (yellowSelected) Modifier.border(
+                                2.5.dp,
+                                MaterialTheme.colorScheme.onBackground,
+                                CircleShape
+                            ) else Modifier
+                        )
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { onHeaderColorChange(yellowInt) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (yellowSelected) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_check_lucide),
+                            contentDescription = null,
+                            tint = Color(0xFF1A1A1A),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // Vertical separator
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
+                )
+
+                // Rotating palette swatches
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(activePalette.size) { index ->
+                        val colorInt = activePalette[index]
+                        val isSelected = headerColorInt == colorInt
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(Color(colorInt.toLong() or 0xFF000000L), CircleShape)
+                                .then(
+                                    if (isSelected) Modifier.border(
+                                        2.5.dp,
+                                        MaterialTheme.colorScheme.onBackground,
+                                        CircleShape
+                                    ) else Modifier
+                                )
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) { onHeaderColorChange(colorInt) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_check_lucide),
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }

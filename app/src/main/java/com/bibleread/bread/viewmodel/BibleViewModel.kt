@@ -87,7 +87,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // Header color (ARGB int), default is green #2D6A4F
-    var headerColorInt by mutableStateOf(prefs.getInt("header_color", 0xFF2D6A4F.toInt()))
+    var headerColorInt by mutableStateOf(prefs.getInt("header_color", 0xFFF8D134.toInt()))
         private set
 
     fun saveHeaderColor(colorInt: Int) {
