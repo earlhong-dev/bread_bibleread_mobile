@@ -15,8 +15,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -28,11 +26,24 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.lazy.layout.LazyLayoutItemProvider
+import androidx.compose.ui.util.lerp
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -42,7 +53,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -115,7 +125,8 @@ fun getFontFamily(styleName: String, customFontFiles: List<File> = emptyList()):
 fun BibleScreen(
     vm: BibleViewModel = viewModel(),
     onOpenBookSelection: ((String, Int) -> Unit) -> Unit = {},
-    onOpenAppearance: () -> Unit = {}
+    onOpenAppearance: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     var selectedBook by rememberSaveable { mutableStateOf(vm.lastBook) }
     var targetChapter by rememberSaveable { mutableIntStateOf(vm.lastChapter) }
@@ -253,127 +264,77 @@ fun BibleScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(vm.headerColorInt.toLong() or 0xFF000000L))
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            // Determine if header color is light so we can use dark content on it
-            val headerColor = Color(vm.headerColorInt.toLong() or 0xFF000000L)
-            val isYellow = vm.headerColorInt == 0xFFF8D134.toInt()
-            val headerContentColor = if (isYellow) Color(0xFF1A1A1A) else Color.White
-            val headerContentAlpha = if (isYellow) Color(0xFF1A1A1A).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f)
-            val buttonBg = MaterialTheme.colorScheme.background
-            val buttonIcon = MaterialTheme.colorScheme.onBackground
 
-            // ── Header card ──────────────────────────────────────────────────
+            // ── Header ───────────────────────────────────────────────────────
             Box(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp, bottom = 18.dp)
+                    .zIndex(1f)
+                    .background(MaterialTheme.colorScheme.background)
+                    .graphicsLayer { alpha = headerAlpha },
                 contentAlignment = Alignment.Center
             ) {
-                Surface(
-                    shape = RectangleShape,
-                    color = Color.Transparent,
-                    tonalElevation = 0.dp,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(color = Color(vm.headerColorInt.toLong() or 0xFF000000L))
+                        .padding(horizontal = 56.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // ── Button row ────────────────────────────────────────
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    Text(
+                        text = selectedBook,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontFamily = currentFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        fontSize = 20.sp,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
                         ) {
-                            // Left: book + search buttons
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .background(buttonBg, CircleShape)
-                                        .clickable(
-                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                            indication = null
-                                        ) {
-                                            if (!hasSelection) onOpenBookSelection { book, chapter ->
-                                                requestChapter(book, chapter)
-                                            }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_book_open),
-                                        contentDescription = "Book selection",
-                                        tint = buttonIcon,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .background(buttonBg, CircleShape)
-                                        .clickable(
-                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                            indication = null
-                                        ) { /* search action */ },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_search),
-                                        contentDescription = "Search",
-                                        tint = buttonIcon,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-                            // Right: settings button
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(buttonBg, CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                        indication = null
-                                    ) { onOpenAppearance() },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_settings2),
-                                    contentDescription = "Settings",
-                                    tint = buttonIcon,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            if (!hasSelection) onOpenBookSelection { book, chapter ->
+                                requestChapter(book, chapter)
                             }
                         }
+                    )
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // ── Book name + chapter below buttons ─────────────────
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showChapterLabel,
+                        enter = slideInVertically(initialOffsetY = { it / 4 }, animationSpec = tween(160)),
+                        exit = slideOutVertically(targetOffsetY = { it / 4 }, animationSpec = tween(120)),
+                        modifier = Modifier.align(Alignment.Center).offset(y = 20.dp)
+                    ) {
                         Text(
-                            text = selectedBook,
-                            color = headerContentColor,
+                            text = "Chapter $displayedChapterLabel",
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                             fontFamily = currentFontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 22.sp,
-                            maxLines = 1,
-                            softWrap = false,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "Chapter $targetChapter",
-                            color = headerContentAlpha,
-                            fontFamily = currentFontFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
+                }
+
+                // Settings icon removed — moved to BookSelectionOverlay (Bible tab)
+
+                // Back button — left
+                IconButton(
+                    onClick = { onBack() },
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 14.dp)
+                        .size(32.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chevron_left),
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
@@ -383,14 +344,7 @@ fun BibleScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(vertical = 4.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 0.dp,
-                    modifier = Modifier.fillMaxSize()
-                ) {
 
             // ── Content ───────────────────────────────────────────────────────
             when (val state = uiState) {
@@ -421,7 +375,7 @@ fun BibleScreen(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 20.dp)
+                            .padding(horizontal = 36.dp)
                             .graphicsLayer { alpha = contentAlpha }
                             .pointerInput(hasSelection) {
                                 if (!hasSelection) {
@@ -449,7 +403,21 @@ fun BibleScreen(
                     ) {
                         versesByChapter.forEach { (chapter, verses) ->
                             item(key = "$selectedBook-$chapter-header") {
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 0.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = chapter.toString(),
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                                        fontFamily = currentFontFamily,
+                                        fontSize = (fontSize * 3.55f).sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 2.sp
+                                    )
+                                }
                             }
                             items(
                                 verses,
@@ -576,7 +544,6 @@ fun BibleScreen(
                 }
             }
 
-                } // end Surface
         }
     }
 
@@ -810,15 +777,40 @@ private val NEW_TESTAMENT = listOf(
     "1 Pedro","2 Pedro","1 Juan","2 Juan","3 Juan","Judas","Pahayag"
 )
 
+// Genre groupings
+private val GENRE_LAW        = listOf("Genesis","Exodo","Levitico","Mga Bilang","Deuteronomio")
+private val GENRE_HISTORY    = listOf("Josue","Mga Hukom","Ruth","1 Samuel","2 Samuel","1 Mga Hari","2 Mga Hari","1 Mga Cronica","2 Mga Cronica","Ezra","Nehemias","Ester")
+private val GENRE_POETRY     = listOf("Job","Mga Awit","Mga Kawikaan","Ang Mangangaral","Ang Awit ni Solomon")
+private val GENRE_PROPHETS   = listOf("Isaias","Jeremias","Mga Panaghoy","Ezekiel","Daniel","Hosea","Joel","Amos","Obadias","Jonas","Mikas","Nahum","Habakuk","Zefanias","Hagai","Zacarias","Malakias")
+private val GENRE_GOSPELS    = listOf("Mateo","Marcos","Lucas","Juan")
+private val GENRE_CHURCH     = listOf("Mga Gawa")
+private val GENRE_LETTERS    = listOf("Mga Taga-Roma","1 Mga Taga-Corinto","2 Mga Taga-Corinto","Mga Taga-Galacia","Mga Taga-Efeso","Mga Taga-Filipos","Mga Taga-Colosas","1 Mga Taga-Tesalonica","2 Mga Taga-Tesalonica","1 Timoteo","2 Timoteo","Tito","Filemon","Mga Hebreo","Santiago","1 Pedro","2 Pedro","1 Juan","2 Juan","3 Juan","Judas")
+private val GENRE_PROPHECY   = listOf("Pahayag")
+
+private sealed class BookListItem {
+    data class Label(val text: String) : BookListItem()
+    data class Book(val name: String, val section: String) : BookListItem()
+}
+
+private data class BookSection(val label: String, val books: List<String>)
+
 @Composable
 fun BookSelectionOverlay(
     activeTranslationName: String = "",
     onTranslationClick: () -> Unit = {},
     onBookSelected: (String, Int) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {},
+    fontStyle: String = "Default",
+    customFonts: List<java.io.File> = emptyList()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var expandedBook by remember { mutableStateOf<String?>(null) }
+    var selectedFilter by remember { mutableStateOf("All Books") }
+
+    val currentFontFamily = remember(fontStyle, customFonts) {
+        getFontFamily(fontStyle, customFonts)
+    }
 
     val query = searchQuery.trim().lowercase()
 
@@ -844,10 +836,23 @@ fun BookSelectionOverlay(
             .map { it.name }
     } else emptyList()
 
-    val filteredOT = if (!isSearching) OLD_TESTAMENT
-                     else emptyList()
-    val filteredNT = if (!isSearching) NEW_TESTAMENT
-                     else emptyList()
+    // Books to show based on selected filter (when not searching)
+    val filteredBooks = when (selectedFilter) {
+        "Old Testament" -> OLD_TESTAMENT
+        "New Testament" -> NEW_TESTAMENT
+        "Law"           -> GENRE_LAW
+        "History"       -> GENRE_HISTORY
+        "Poetry"        -> GENRE_POETRY
+        "Prophets"      -> GENRE_PROPHETS
+        "Gospels"       -> GENRE_GOSPELS
+        "Church History"-> GENRE_CHURCH
+        "Letters"       -> GENRE_LETTERS
+        "Prophecy"      -> GENRE_PROPHECY
+        else            -> OLD_TESTAMENT + NEW_TESTAMENT
+    }
+
+    val filteredOT = emptyList<String>() // no longer used separately
+    val filteredNT = emptyList<String>() // no longer used separately
 
     Column(
         modifier = Modifier
@@ -855,33 +860,38 @@ fun BookSelectionOverlay(
             .background(MaterialTheme.colorScheme.background)
     ) {
         // ── Header ────────────────────────────────────────────────────────────
+        // Row with appearance button on the right
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 20.dp, bottom = 12.dp),
-            contentAlignment = Alignment.Center
+                .padding(top = 20.dp, end = 6.dp),
+            contentAlignment = Alignment.CenterEnd
         ) {
-            Text(
-                text = "Scripture",
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
             IconButton(
-                onClick = onClose,
+                onClick = { onOpenAppearance() },
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 12.dp)
                     .size(32.dp)
             ) {
                 Icon(
-                    painterResource(R.drawable.ic_close),
-                    contentDescription = "Close",
+                    painter = painterResource(R.drawable.ic_settings2),
+                    contentDescription = "Settings",
                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp)
                 )
             }
         }
+        // Big title below the button row
+        Text(
+            text = "Bible",
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = 42.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = currentFontFamily,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 16.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
 
         // ── Search ────────────────────────────────────────────────────────────
         CompositionLocalProvider(
@@ -891,13 +901,12 @@ fun BookSelectionOverlay(
             )
         ) {
         Surface(
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(50.dp),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 0.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -920,6 +929,7 @@ fun BookSelectionOverlay(
                         Text(
                             "Search book...",
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
+                            fontFamily = currentFontFamily,
                             fontSize = 15.sp,
                             lineHeight = 15.sp
                         )
@@ -933,6 +943,7 @@ fun BookSelectionOverlay(
                         singleLine = true,
                         textStyle = TextStyle(
                             color = MaterialTheme.colorScheme.onBackground,
+                            fontFamily = currentFontFamily,
                             fontSize = 15.sp,
                             lineHeight = 15.sp
                         ),
@@ -961,44 +972,127 @@ fun BookSelectionOverlay(
         } // end CompositionLocalProvider
         Spacer(modifier = Modifier.height(10.dp))
 
-        // ── Placeholder button ────────────────────────────────────────────────
-        Surface(
-            onClick = onTranslationClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(36.dp)
-                .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f)
+        // Hoisted here so filter chips can scroll carousel to top
+        val carouselListState = rememberLazyListState()
+        val carouselScope = rememberCoroutineScope()
+        LaunchedEffect(selectedFilter) {
+            carouselListState.scrollToItem(0)
+        }
+
+        // ── Filter chips ──────────────────────────────────────────────────────
+        val primaryFilters = listOf("All Books", "Old Testament", "New Testament")
+        val genreFilters   = listOf("Law", "History", "Poetry", "Prophets", "Gospels", "Church History", "Letters", "Prophecy")
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Bible Version",
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Normal
+            items(primaryFilters) { filter ->
+                val isSelected = selectedFilter == filter
+                Surface(
+                    onClick = { selectedFilter = filter; expandedBook = null },
+                    shape = RoundedCornerShape(50.dp),
+                    color = if (isSelected)
+                        MaterialTheme.colorScheme.onBackground
+                    else
+                        MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = filter,
+                            fontFamily = currentFontFamily,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.background
+                            else
+                                MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
+            }
+
+            // Separator line
+            item {
+                Box(
+                    modifier = Modifier
+                        .height(34.dp)
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
                 )
-                Text(
-                    text = activeTranslationName,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            }
+
+            items(genreFilters) { filter ->
+                val isSelected = selectedFilter == filter
+                Surface(
+                    onClick = { selectedFilter = filter; expandedBook = null },
+                    shape = RoundedCornerShape(50.dp),
+                    color = if (isSelected)
+                        MaterialTheme.colorScheme.onBackground
+                    else
+                        MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = filter,
+                            fontFamily = currentFontFamily,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.background
+                            else
+                                MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
         // ── Book list ─────────────────────────────────────────────────────────
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            if (isSearching) {
-                // Flat ranked results — no testament headers
+        val allSections = listOf(
+            BookSection("Law",           GENRE_LAW),
+            BookSection("History",       GENRE_HISTORY),
+            BookSection("Poetry",        GENRE_POETRY),
+            BookSection("Prophets",      GENRE_PROPHETS),
+            BookSection("Gospels",       GENRE_GOSPELS),
+            BookSection("Church History",GENRE_CHURCH),
+            BookSection("Letters",       GENRE_LETTERS),
+            BookSection("Prophecy",      GENRE_PROPHECY)
+        )
+
+        val sectionsToShow = when (selectedFilter) {
+            "Old Testament"  -> allSections.filter { it.label in listOf("Law","History","Poetry","Prophets") }
+            "New Testament"  -> allSections.filter { it.label in listOf("Gospels","Church History","Letters","Prophecy") }
+            "Law","History","Poetry","Prophets","Gospels","Church History","Letters","Prophecy"
+                             -> allSections.filter { it.label == selectedFilter }
+            else             -> allSections
+        }
+
+        // Flat list of books only (no label items — label shown above separately)
+        val bookItems: List<BookListItem.Book> = if (isSearching) {
+            rankedResults.map { BookListItem.Book(it, "") }
+        } else {
+            sectionsToShow.flatMap { section ->
+                section.books.map { BookListItem.Book(it, section.label) }
+            }
+        }
+
+        if (isSearching) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 120.dp)
+            ) {
                 items(rankedResults) { book ->
                     BookRow(
                         book = book,
@@ -1007,48 +1101,318 @@ fun BookSelectionOverlay(
                         onChapterSelected = { chapter -> onBookSelected(book, chapter) }
                     )
                 }
-            } else {
-                if (filteredOT.isNotEmpty()) {
-                    item { TestamentLabel("Old Testament") }
-                    items(filteredOT) { book ->
-                        BookRow(
-                            book = book,
-                            isExpanded = expandedBook == book,
-                            onToggle = { expandedBook = if (expandedBook == book) null else book },
-                            onChapterSelected = { chapter -> onBookSelected(book, chapter) }
-                        )
-                    }
+            }
+        } else {
+            // ── Carousel ──────────────────────────────────────────────────────
+            val listState = carouselListState
+            val density   = LocalDensity.current
+
+            // Card dimensions
+            val cardWidth  = 160.dp
+            val cardHeight = 220.dp
+            val cardWidthPx  = with(density) { cardWidth.toPx() }
+            val spacing      = 8.dp
+            val spacingPx    = with(density) { spacing.toPx() }
+
+            // Derive center index from scroll state
+            val centerIndex by remember {
+                derivedStateOf {
+                    val layoutInfo   = listState.layoutInfo
+                    val viewportMid  = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+                    layoutInfo.visibleItemsInfo
+                        .minByOrNull { kotlin.math.abs((it.offset + it.size / 2f) - viewportMid) }
+                        ?.index ?: 0
                 }
-                if (filteredNT.isNotEmpty()) {
-                    item { TestamentLabel("New Testament") }
-                    items(filteredNT) { book ->
-                        BookRow(
-                            book = book,
-                            isExpanded = expandedBook == book,
-                            onToggle = { expandedBook = if (expandedBook == book) null else book },
-                            onChapterSelected = { chapter -> onBookSelected(book, chapter) }
+            }
+
+            // Track label changes and scroll direction for slide animation
+            var currentLabel by remember { mutableStateOf(bookItems.getOrNull(0)?.section ?: "") }
+            var slideFromRight by remember { mutableStateOf(true) }
+            var prevCenterIndex by remember { mutableIntStateOf(0) }
+
+            // Reset label when filter changes (bookItems changes, center goes back to 0)
+            LaunchedEffect(bookItems) {
+                val newLabel = bookItems.getOrNull(0)?.section ?: ""
+                slideFromRight = true
+                currentLabel = newLabel
+                prevCenterIndex = 0
+            }
+
+            LaunchedEffect(centerIndex) {
+                val newLabel = bookItems.getOrNull(centerIndex)?.section ?: ""
+                if (newLabel != currentLabel) {
+                    slideFromRight = centerIndex > prevCenterIndex
+                    currentLabel = newLabel
+                }
+                prevCenterIndex = centerIndex
+                // Close chapter picker if center moved away from expanded book
+                if (expandedBook != null && bookItems.getOrNull(centerIndex)?.name != expandedBook) {
+                    expandedBook = null
+                }
+            }
+
+            // Genre label with directional slide transition
+            AnimatedContent(
+                targetState = currentLabel,
+                transitionSpec = {
+                    if (slideFromRight) {
+                        slideInHorizontally { it } + fadeIn() togetherWith
+                        slideOutHorizontally { -it } + fadeOut()
+                    } else {
+                        slideInHorizontally { -it } + fadeIn() togetherWith
+                        slideOutHorizontally { it } + fadeOut()
+                    }
+                },
+                label = "genreLabel"
+            ) { label ->
+                Text(
+                    text = label,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = currentFontFamily,
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp)
+                )
+            }
+
+            // Carousel
+            LazyRow(
+                state = listState,
+                contentPadding = PaddingValues(
+                    horizontal = (LocalConfiguration.current.screenWidthDp.dp - cardWidth) / 2,
+                    vertical = 16.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(cardHeight + 100.dp),
+                flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+            ) {
+                itemsIndexed(bookItems) { index, item ->
+                    val distFromCenter by remember {
+                        derivedStateOf {
+                            val layoutInfo  = listState.layoutInfo
+                            val viewportMid = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+                            val info = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                            if (info != null) {
+                                val itemMid = info.offset + info.size / 2f
+                                kotlin.math.abs(itemMid - viewportMid) / (cardWidthPx + spacingPx)
+                            } else 1f
+                        }
+                    }
+                    val scale = lerp(1f, 0.78f, distFromCenter.coerceIn(0f, 1f))
+                    val alpha = lerp(1f, 0.5f, distFromCenter.coerceIn(0f, 1f))
+
+                    val cardColor = when (item.section) {
+                        "Law"           -> Color(0xFF7EC8E3)
+                        "History"       -> Color(0xFF8B5E3C)
+                        "Poetry"        -> Color(0xFF4CAF50)
+                        "Prophets"      -> Color(0xFFFFD54F)
+                        "Gospels"       -> Color(0xFF9C27B0)
+                        "Church History"-> Color(0xFF1976D2)
+                        "Letters"       -> Color(0xFFF48FB1)
+                        "Prophecy"      -> Color(0xFFFF7043)
+                        else            -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)
+                    }
+
+                    val cardImageRes = when (item.section) {
+                        "Law"           -> R.drawable.books_law
+                        "History"       -> R.drawable.books_history
+                        "Poetry"        -> R.drawable.books_poetry
+                        "Prophets"      -> R.drawable.books_prophets
+                        "Gospels"       -> R.drawable.books_gospels
+                        "Church History"-> R.drawable.books_church
+                        "Letters"       -> R.drawable.books_letters
+                        "Prophecy"      -> R.drawable.books_prophecy
+                        else            -> null
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .width(cardWidth)
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                this.alpha = alpha
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Card — image is the card
+                        val clickModifier = Modifier
+                            .width(cardWidth)
+                            .height(cardHeight)
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                when {
+                                    index == centerIndex -> {
+                                        // Center book — open chapter picker
+                                        expandedBook = if (expandedBook == item.name) null else item.name
+                                    }
+                                    index < centerIndex -> {
+                                        // Left book — scroll to previous
+                                        carouselScope.launch {
+                                            listState.animateScrollToItem((centerIndex - 1).coerceAtLeast(0))
+                                        }
+                                    }
+                                    else -> {
+                                        // Right book — scroll to next
+                                        carouselScope.launch {
+                                            listState.animateScrollToItem((centerIndex + 1).coerceAtMost(bookItems.lastIndex))
+                                        }
+                                    }
+                                }
+                            }
+
+                        if (cardImageRes != null) {
+                            Image(
+                                painter = painterResource(id = cardImageRes),
+                                contentDescription = item.section,
+                                contentScale = ContentScale.Crop,
+                                modifier = clickModifier
+                            )
+                        } else {
+                            Box(modifier = clickModifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)))
+                        }
+                        // Book name below card
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = item.name,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = currentFontFamily,
+                            lineHeight = 17.sp,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.width(cardWidth)
                         )
                     }
                 }
             }
-            item { Spacer(modifier = Modifier.height(40.dp)) }
+
+            // Chapter picker for expanded book
+            val expandedItem = bookItems.firstOrNull { it.name == expandedBook }
+            AnimatedVisibility(
+                visible = expandedItem != null,
+                enter = fadeIn(tween(200)) + expandVertically(tween(250)),
+                exit  = fadeOut(tween(150)) + shrinkVertically(tween(200))
+            ) {
+                expandedItem?.let { item ->
+                    val chapters = BIBLE_BOOKS[item.name] ?: 1
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        (1..chapters).forEach { chapter ->
+                            Surface(
+                                onClick = { onBookSelected(item.name, chapter) },
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = chapter.toString(),
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = currentFontFamily
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TestamentLabel(label: String) {
-    Text(
-        text = label,
-        color = MaterialTheme.colorScheme.onBackground,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.5.sp,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-    )
+private fun BookCard(
+    book: String,
+    isExpanded: Boolean,
+    onTap: () -> Unit,
+    onChapterSelected: (Int) -> Unit,
+    fontFamily: FontFamily = FontFamily.Default
+) {
+    val chapters = BIBLE_BOOKS[book] ?: 1
+
+    Column {
+        // Book card
+        Surface(
+            onClick = onTap,
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f),
+            modifier = Modifier
+                .width(110.dp)
+                .height(80.dp)
+        ) {
+            Box(
+                modifier = Modifier.padding(12.dp),
+                contentAlignment = Alignment.BottomStart
+            ) {
+                Text(
+                    text = book,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = fontFamily,
+                    lineHeight = 17.sp,
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Chapter picker — expands below card
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn(tween(200)) + expandVertically(tween(250)),
+            exit = fadeOut(tween(150)) + shrinkVertically(tween(200))
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f),
+                modifier = Modifier
+                    .width(110.dp)
+                    .padding(top = 6.dp)
+            ) {
+                FlowRow(
+                    modifier = Modifier.padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    (1..chapters).forEach { chapter ->
+                        Surface(
+                            onClick = { onChapterSelected(chapter) },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = chapter.toString(),
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = fontFamily
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1135,8 +1499,6 @@ fun AppearanceSettingsOverlay(
     customFonts: List<File> = emptyList(),
     selectedThemeIndex: Int,
     onThemeChange: (Int) -> Unit,
-    headerColorInt: Int = 0xFF2D6A4F.toInt(),
-    onHeaderColorChange: (Int) -> Unit = {},
     onAddFont: () -> Unit = {},
     onRemoveFont: (String) -> Unit = {},
     onClose: () -> Unit
@@ -1180,7 +1542,6 @@ fun AppearanceSettingsOverlay(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(
@@ -1439,7 +1800,7 @@ fun AppearanceSettingsOverlay(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Theme (Dark Mode toggle + color picker) ───────────────────────
+            // Theme section header
             Text(
                 text = "Theme",
                 color = MaterialTheme.colorScheme.onBackground,
@@ -1448,197 +1809,71 @@ fun AppearanceSettingsOverlay(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── Color Picker ──────────────────────────────────────────────────
-            val lighterPalette = remember {
-                listOf(
-                    0xFF5DC494.toInt(),
-                    0xFF6AAFC4.toInt(),
-                    0xFF9E8EC8.toInt(),
-                    0xFFD98A8A.toInt(),
-                    0xFFD4886A.toInt()
-                )
-            }
-            val defaultPalette = remember {
-                listOf(
-                    0xFF2E6A50.toInt(),
-                    0xFF547A86.toInt(),
-                    0xFF81758F.toInt(),
-                    0xFFA97878.toInt(),
-                    0xFFB4775D.toInt()
-                )
-            }
-            val darkerPalette = remember {
-                listOf(
-                    0xFF18382A.toInt(),
-                    0xFF38525A.toInt(),
-                    0xFF5E5468.toInt(),
-                    0xFF855555.toInt(),
-                    0xFF8A5640.toInt()
-                )
-            }
+            // Defined themes for selection
+            val themes = listOf(
+                Triple("Paper", Color(0xFFFEF9F3), Color(0xFF5B4636)),
+                Triple("Dark", Color(0xFF131313), Color(0xFFE0E0E0)),
+                Triple("Light", Color(0xFFEEECED), Color.Black)
+            )
 
-            val yellowInt = 0xFFF8D134.toInt()
-
-            // Yellow is standalone — only update palette tab when a palette color is selected
-            var selectedPaletteTab by remember {
-                val tab = when {
-                    lighterPalette.contains(headerColorInt) -> 0
-                    darkerPalette.contains(headerColorInt) -> 2
-                    else -> 1
-                }
-                mutableStateOf(tab)
-            }
-            val activePalette = when (selectedPaletteTab) {
-                0 -> lighterPalette
-                2 -> darkerPalette
-                else -> defaultPalette
-            }
-
-            // Top row: Dark Mode toggle (left) + Switch Palette (right)
-            Row(
+            LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Dark mode label + toggle
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) { onThemeChange(if (selectedThemeIndex == 1) 0 else 1) }
-                ) {
-                    Text(
-                        text = "Dark Mode",
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    val isDark = selectedThemeIndex == 1
-                    Box(
-                        modifier = Modifier
-                            .width(48.dp)
-                            .height(26.dp)
-                            .background(
-                                if (isDark) MaterialTheme.colorScheme.onBackground
-                                else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
-                                RoundedCornerShape(13.dp)
-                            ),
-                        contentAlignment = if (isDark) Alignment.CenterEnd else Alignment.CenterStart
+                items(themes.size) { index ->
+                    val (themeName, bgColor, textColor) = themes[index]
+                    val isSelected = selectedThemeIndex == index
+                    Surface(
+                        onClick = { onThemeChange(index) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.05f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f)
+                        ),
+                        modifier = Modifier.width(100.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(3.dp)
-                                .size(20.dp)
-                                .background(
-                                    if (isDark) MaterialTheme.colorScheme.background else Color.White,
-                                    CircleShape
-                                )
-                        )
-                    }
-                }
-
-                // Switch Palette button
-                Box(
-                    modifier = Modifier
-                        .background(
-                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
-                            RoundedCornerShape(20.dp)
-                        )
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) { selectedPaletteTab = (selectedPaletteTab + 1) % 3 }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Switch Palette",
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Swatch row: fixed yellow | separator | rotating palette
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Fixed yellow swatch — independent of palette
-                val yellowSelected = headerColorInt == yellowInt
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(Color(0xFFF8D134), CircleShape)
-                        .then(
-                            if (yellowSelected) Modifier.border(
-                                2.5.dp,
-                                MaterialTheme.colorScheme.onBackground,
-                                CircleShape
-                            ) else Modifier
-                        )
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) { onHeaderColorChange(yellowInt) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (yellowSelected) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_check_lucide),
-                            contentDescription = null,
-                            tint = Color(0xFF1A1A1A),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                // Vertical separator
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(36.dp)
-                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
-                )
-
-                // Rotating palette swatches
-                LazyRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(activePalette.size) { index ->
-                        val colorInt = activePalette[index]
-                        val isSelected = headerColorInt == colorInt
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(Color(colorInt.toLong() or 0xFF000000L), CircleShape)
-                                .then(
-                                    if (isSelected) Modifier.border(
-                                        2.5.dp,
-                                        MaterialTheme.colorScheme.onBackground,
-                                        CircleShape
-                                    ) else Modifier
-                                )
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null
-                                ) { onHeaderColorChange(colorInt) },
-                            contentAlignment = Alignment.Center
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            if (isSelected) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_check_lucide),
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            // Mini mockup box representing the theme layout
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(55.dp)
+                                    .background(bgColor, RoundedCornerShape(6.dp))
+                                    .padding(8.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    // 3 mockup text lines
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.9f)
+                                            .height(3.dp)
+                                            .background(textColor.copy(alpha = 0.8f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.75f)
+                                            .height(3.dp)
+                                            .background(textColor.copy(alpha = 0.8f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.5f)
+                                            .height(3.dp)
+                                            .background(textColor.copy(alpha = 0.5f))
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = themeName,
+                                color = if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
                         }
                     }
                 }

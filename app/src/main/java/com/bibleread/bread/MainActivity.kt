@@ -169,6 +169,7 @@ class MainActivity : ComponentActivity() {
 sealed class Screen(val route: String, val icon: Int? = null, val label: String) {
     object Splash    : Screen("splash", label = "Splash")
     object Reader    : Screen("reader",    R.drawable.ic_bibletab,   "Bible")
+    object Scripture : Screen("scripture", label = "Scripture")
     object Search    : Screen("search",    R.drawable.ic_journaltab,  "Journal")
     object Profile   : Screen("profile",   R.drawable.ic_profiletab, "Profile")
     object Community : Screen("home",      R.drawable.ic_commtab,    "Community")
@@ -240,22 +241,16 @@ fun MainApp(dbReady: State<Boolean>) {
         val window = (context as android.app.Activity).window
         val isSplash = currentRoute == null || currentRoute == Screen.Splash.route
         val lightIcons = if (isSplash) {
-            true
-        } else if (currentRoute == Screen.Reader.route) {
-            // Use dark icons if header color is light
-            val r = android.graphics.Color.red(bibleVm.headerColorInt) / 255f
-            val g = android.graphics.Color.green(bibleVm.headerColorInt) / 255f
-            val b = android.graphics.Color.blue(bibleVm.headerColorInt) / 255f
-            (0.299f * r + 0.587f * g + 0.114f * b) > 0.5f
+            true // splash is yellow — always dark icons
         } else {
-            themeIndex == 0
+            themeIndex == 0 || themeIndex == 2 // paper/light = dark icons, dark = light icons
         }
         WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = lightIcons
     }
 
     val showNavBar = currentRoute != null &&
         currentRoute != Screen.Splash.route &&
-        currentRoute != Screen.BookSelection.route &&
+        currentRoute != Screen.Scripture.route &&
         currentRoute != Screen.Appearance.route &&
         currentRoute != Screen.NewNote.route &&
         currentRoute != Screen.ViewNote.route
@@ -263,12 +258,7 @@ fun MainApp(dbReady: State<Boolean>) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                if (currentRoute == Screen.Reader.route)
-                    Color(bibleVm.headerColorInt.toLong() or 0xFF000000L)
-                else
-                    MaterialTheme.colorScheme.background
-            )
+            .background(MaterialTheme.colorScheme.background)
     ) {
 
         // ── Content layer ──────────────────────────────────────────────────
@@ -278,9 +268,7 @@ fun MainApp(dbReady: State<Boolean>) {
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (currentRoute != null &&
-                        currentRoute != Screen.Splash.route &&
-                        currentRoute != Screen.Reader.route)
+                    if (currentRoute != null && currentRoute != Screen.Splash.route)
                         Modifier.statusBarsPadding()
                     else
                         Modifier
@@ -309,20 +297,47 @@ fun MainApp(dbReady: State<Boolean>) {
                             exactAlarmPermissionLauncher.launch(Manifest.permission.SCHEDULE_EXACT_ALARM)
                         }
                         bibleVm.loadChapter(book, chapter)
-                        navController.navigate(Screen.Reader.route) {
+                        navController.navigate(Screen.Scripture.route) {
                             popUpTo(Screen.Splash.route) { inclusive = true }
                         }
                     }
                 )
             }
+            // Bible tab — shows book selection as the entry point
             composable(Screen.Reader.route) {
+                BookSelectionOverlay(
+                    onBookSelected = { book, chapter ->
+                        bibleVm.loadChapter(book, chapter)
+                        if (bookSelectionCallback != null) {
+                            bookSelectionCallback?.invoke(book, chapter)
+                            bookSelectionCallback = null
+                            navController.popBackStack()
+                        } else {
+                            navController.navigate(Screen.Scripture.route)
+                        }
+                    },
+                    onOpenAppearance = { navController.navigate(Screen.Appearance.route) },
+                    onClose = {
+                        if (navController.previousBackStackEntry != null) {
+                            navController.popBackStack()
+                        }
+                    },
+                    fontStyle = bibleVm.fontStyle,
+                    customFonts = bibleVm.customFonts
+                )
+            }
+            // Scripture viewer — shown after selecting a book
+            composable(Screen.Scripture.route) {
                 BibleScreen(
                     vm = bibleVm,
                     onOpenBookSelection = { onBookSelected ->
                         bookSelectionCallback = onBookSelected
-                        navController.navigate(Screen.BookSelection.route)
+                        navController.navigate(Screen.Reader.route) {
+                            launchSingleTop = true
+                        }
                     },
-                    onOpenAppearance = { navController.navigate(Screen.Appearance.route) }
+                    onOpenAppearance = { navController.navigate(Screen.Appearance.route) },
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Search.route) {
@@ -338,16 +353,6 @@ fun MainApp(dbReady: State<Boolean>) {
                     }
                 )
             }
-            composable(Screen.BookSelection.route) {
-                BookSelectionOverlay(
-                    onBookSelected = { book, chapter ->
-                        bookSelectionCallback?.invoke(book, chapter)
-                        bookSelectionCallback = null
-                        navController.popBackStack()
-                    },
-                    onClose = { navController.popBackStack() }
-                )
-            }
             composable(Screen.Appearance.route) {
                 val fontFileLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.OpenDocument()
@@ -360,8 +365,6 @@ fun MainApp(dbReady: State<Boolean>) {
                     customFonts = bibleVm.customFonts,
                     selectedThemeIndex = bibleVm.selectedThemeIndex,
                     onThemeChange = { bibleVm.saveThemeIndex(it) },
-                    headerColorInt = bibleVm.headerColorInt,
-                    onHeaderColorChange = { bibleVm.saveHeaderColor(it) },
                     onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
                     onRemoveFont = { bibleVm.removeCustomFont(it) },
                     onClose = { navController.popBackStack() }
@@ -430,11 +433,7 @@ fun MainApp(dbReady: State<Boolean>) {
                     .padding(horizontal = 28.dp, vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val navBarColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 1f).let {
-                    // Light mode: darken the pill; dark mode: lighten it — both stay distinct from background
-                    val blendTarget = if (themeIndex == 0) Color.Black else Color.White
-                    androidx.compose.ui.graphics.lerp(it, blendTarget, 0.08f)
-                }
+                val navBarColor = MaterialTheme.colorScheme.surfaceVariant
 
                 Surface(
                     tonalElevation = 4.dp,
@@ -484,10 +483,6 @@ fun MainApp(dbReady: State<Boolean>) {
                     val circleSizeDp = 52.dp
                     val density = androidx.compose.ui.platform.LocalDensity.current
 
-                    // Icon color: unselected = theme, selected = white
-                    val circleIsLight = false
-                    val iconOnCircle = Color.White
-
                     BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxSize()
@@ -505,7 +500,7 @@ fun MainApp(dbReady: State<Boolean>) {
                                 .offset { IntOffset(circleOffsetX, 0) }
                                 .align(Alignment.CenterStart)
                                 .background(
-                                    color = Color(bibleVm.headerColorInt.toLong() or 0xFF000000L),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                     shape = CircleShape
                                 )
                         )
@@ -528,14 +523,6 @@ fun MainApp(dbReady: State<Boolean>) {
                                     }
                                     else -> 0.45f
                                 }
-                                // Blend icon color: unselected uses theme color, selected uses iconOnCircle
-                                val proximity = (1f - kotlin.math.abs(animatedIndex - index)).coerceIn(0f, 1f)
-                                val baseColor = MaterialTheme.colorScheme.onSurface
-                                val iconTint = androidx.compose.ui.graphics.lerp(
-                                    baseColor.copy(alpha = 0.45f),
-                                    iconOnCircle,
-                                    proximity
-                                )
 
                                 Box(
                                     modifier = Modifier
@@ -560,10 +547,7 @@ fun MainApp(dbReady: State<Boolean>) {
                                             painter = painterResource(id = it),
                                             contentDescription = screen.label,
                                             modifier = Modifier.size(24.dp),
-                                            tint = if (index == selectedIndex || index == prevIndexSnapshot)
-                                                iconTint
-                                            else
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = iconAlpha)
                                         )
                                     }
                                 }

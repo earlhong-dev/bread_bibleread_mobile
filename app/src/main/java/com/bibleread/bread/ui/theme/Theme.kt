@@ -19,10 +19,10 @@ private val LightColorScheme = lightColorScheme(
     primary           = BreadTan,
     secondary         = FellowshipPurple,
     tertiary          = PersonalBibleGreen,
-    background        = Color(0xFFFEF9F3),
-    surface           = Color(0xFFFEF9F3),
-    surfaceVariant    = Color(0xFFEEE9E3),
-    secondaryContainer = Color(0xFFDED9D3),
+    background        = Color(0xFFEEECED),
+    surface           = Color(0xFFEEECED),
+    surfaceVariant    = Color(0xFFDCDCDC),
+    secondaryContainer = Color(0xFFCECECE),
     onPrimary         = Color.White,
     onSecondary       = Color.Black,
     onTertiary        = Color.White,
@@ -35,10 +35,10 @@ private val DarkColorScheme = darkColorScheme(
     primary           = BreadTan,
     secondary         = FellowshipPurple,
     tertiary          = PersonalBibleGreen,
-    background        = Color(0xFF1A1A1A),
-    surface           = Color(0xFF1A1A1A),
-    surfaceVariant    = Color(0xFF1A1A1A),
-    secondaryContainer = Color(0xFF2A2A2A),
+    background        = Color(0xFF131313),
+    surface           = Color(0xFF131313),
+    surfaceVariant    = Color(0xFF242526),
+    secondaryContainer = Color(0xFF303134),
     onPrimary         = Color.Black,
     onSecondary       = Color.White,
     onTertiary        = Color.Black,
@@ -46,12 +46,30 @@ private val DarkColorScheme = darkColorScheme(
     onSurface         = Color.White
 )
 
+// Paper Color Scheme (formerly Sepia)
+private val PaperColorScheme = lightColorScheme(
+    primary           = BreadTan,
+    secondary         = FellowshipPurple,
+    tertiary          = PersonalBibleGreen,
+    background        = Color(0xFFFEF9F3),
+    surface           = Color(0xFFFEF9F3),
+    surfaceVariant    = Color(0xFFEDE5D5),
+    secondaryContainer = Color(0xFFDFD4C0),
+    onPrimary         = Color.White,
+    onSecondary       = Color(0xFF5B4636),
+    onTertiary        = Color.White,
+    onBackground      = Color(0xFF5B4636),
+    onSurface         = Color(0xFF5B4636)
+)
+
+
 val LocalThemeIndex = staticCompositionLocalOf { 1 } // Default to 1 (Dark)
 
 @Composable
 fun BreadTheme(themeIndex: Int = 1, content: @Composable () -> Unit) {
     val colorScheme = when (themeIndex) {
-        0 -> LightColorScheme
+        0 -> PaperColorScheme
+        2 -> LightColorScheme
         else -> DarkColorScheme
     }
 
@@ -59,12 +77,11 @@ fun BreadTheme(themeIndex: Int = 1, content: @Composable () -> Unit) {
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Set status bar and navigation bar to transparent for edge-to-edge display
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
-            
-            // Set status bar icons: dark icons for Light (0) and Sepia (2) themes, light icons for Dark (1) theme
-            val darkStatusIcons = themeIndex == 0
+
+            // Dark icons for Paper (0) and Light (2), light icons for Dark (1)
+            val darkStatusIcons = themeIndex == 0 || themeIndex == 2
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkStatusIcons
         }
     }
