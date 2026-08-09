@@ -323,7 +323,9 @@ fun MainApp(dbReady: State<Boolean>) {
                         }
                     },
                     fontStyle = bibleVm.fontStyle,
-                    customFonts = bibleVm.customFonts
+                    customFonts = bibleVm.customFonts,
+                    getReadCount = { book -> bibleVm.readChapterCount(book) },
+                    getTotalCount = { book -> bibleVm.totalChapterCount(book) }
                 )
             }
             // Scripture viewer — shown after selecting a book
@@ -430,7 +432,7 @@ fun MainApp(dbReady: State<Boolean>) {
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(horizontal = 28.dp, vertical = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val navBarColor = MaterialTheme.colorScheme.surfaceVariant
@@ -440,6 +442,7 @@ fun MainApp(dbReady: State<Boolean>) {
                     shadowElevation = 0.dp,
                     shape = RoundedCornerShape(50.dp),
                     color = navBarColor,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
@@ -480,13 +483,13 @@ fun MainApp(dbReady: State<Boolean>) {
                     )
                     val prevIndexSnapshot = remember(selectedIndex) { previousIndex }
 
-                    val circleSizeDp = 52.dp
+                    val circleSizeDp = 54.dp
                     val density = androidx.compose.ui.platform.LocalDensity.current
 
                     BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 2.dp)
+                            .padding(horizontal = 0.dp)
                     ) {
                         val totalWidthPx = with(density) { maxWidth.toPx() }
                         val slotWidthPx = totalWidthPx / items.size
@@ -499,6 +502,18 @@ fun MainApp(dbReady: State<Boolean>) {
                                 .size(circleSizeDp)
                                 .offset { IntOffset(circleOffsetX, 0) }
                                 .align(Alignment.CenterStart)
+                                .drawBehind {
+                                    drawIntoCanvas { canvas ->
+                                        val paint = Paint().apply {
+                                            asFrameworkPaint().apply {
+                                                isAntiAlias = true
+                                                color = android.graphics.Color.TRANSPARENT
+                                                setShadowLayer(6f, 0f, 1f, android.graphics.Color.argb(100, 0, 0, 0))
+                                            }
+                                        }
+                                        canvas.drawCircle(center, size.minDimension / 2f, paint)
+                                    }
+                                }
                                 .background(
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                     shape = CircleShape

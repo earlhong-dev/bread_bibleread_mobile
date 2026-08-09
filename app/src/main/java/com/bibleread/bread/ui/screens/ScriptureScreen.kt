@@ -538,6 +538,43 @@ fun BibleScreen(
                                     )
                                 }
                             }
+                            item(key = "$selectedBook-$chapter-markread") {
+                                val isRead = vm.isChapterRead(selectedBook, chapter)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 36.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Surface(
+                                        onClick = {
+                                            if (isRead) vm.unmarkChapterRead(selectedBook, chapter)
+                                            else vm.markChapterRead(selectedBook, chapter)
+                                        },
+                                        shape = RoundedCornerShape(50.dp),
+                                        color = if (isRead)
+                                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
+                                        else
+                                            MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(44.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = if (isRead) "✓ Read" else "Mark as Read",
+                                                color = if (isRead)
+                                                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                                                else
+                                                    MaterialTheme.colorScheme.background,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontFamily = currentFontFamily
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             item { Spacer(modifier = Modifier.height(24.dp)) }
                         }
                     }
@@ -802,7 +839,9 @@ fun BookSelectionOverlay(
     onClose: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
     fontStyle: String = "Default",
-    customFonts: List<java.io.File> = emptyList()
+    customFonts: List<java.io.File> = emptyList(),
+    getReadCount: (String) -> Int = { 0 },
+    getTotalCount: (String) -> Int = { 1 }
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var expandedBook by remember { mutableStateOf<String?>(null) }
@@ -1186,7 +1225,7 @@ fun BookSelectionOverlay(
                 horizontalArrangement = Arrangement.spacedBy(spacing),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(cardHeight + 100.dp),
+                    .wrapContentHeight(),
                 flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
             ) {
                 itemsIndexed(bookItems) { index, item ->
@@ -1238,8 +1277,8 @@ fun BookSelectionOverlay(
                             },
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Card — image is the card
-                        val clickModifier = Modifier
+                        // Card — image only, scroll left/right on side taps, no open
+                        val cardModifier = Modifier
                             .width(cardWidth)
                             .height(cardHeight)
                             .clickable(
@@ -1247,22 +1286,13 @@ fun BookSelectionOverlay(
                                 indication = null
                             ) {
                                 when {
-                                    index == centerIndex -> {
-                                        // Center book — open chapter picker
-                                        expandedBook = if (expandedBook == item.name) null else item.name
+                                    index < centerIndex -> carouselScope.launch {
+                                        listState.animateScrollToItem((centerIndex - 1).coerceAtLeast(0))
                                     }
-                                    index < centerIndex -> {
-                                        // Left book — scroll to previous
-                                        carouselScope.launch {
-                                            listState.animateScrollToItem((centerIndex - 1).coerceAtLeast(0))
-                                        }
+                                    index > centerIndex -> carouselScope.launch {
+                                        listState.animateScrollToItem((centerIndex + 1).coerceAtMost(bookItems.lastIndex))
                                     }
-                                    else -> {
-                                        // Right book — scroll to next
-                                        carouselScope.launch {
-                                            listState.animateScrollToItem((centerIndex + 1).coerceAtMost(bookItems.lastIndex))
-                                        }
-                                    }
+                                    // center — no action, Read button handles opening
                                 }
                             }
 
@@ -1271,66 +1301,130 @@ fun BookSelectionOverlay(
                                 painter = painterResource(id = cardImageRes),
                                 contentDescription = item.section,
                                 contentScale = ContentScale.Crop,
-                                modifier = clickModifier
+                                modifier = cardModifier
                             )
                         } else {
-                            Box(modifier = clickModifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)))
+                            Box(modifier = cardModifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)))
                         }
                         // Book name below card
                         Spacer(modifier = Modifier.height(10.dp))
+                        BoxWithConstraints(
+                            modifier = Modifier.width(cardWidth),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val availableWidthSp = with(LocalDensity.current) { maxWidth.toSp() }
+                            val nameLength = item.name.length.coerceAtLeast(1)
+                            // Estimate: ~0.6sp per char at given size; shrink if needed
+                            val fontSize = (availableWidthSp.value / (nameLength * 0.62f))
+                                .coerceIn(8f, 16f).sp
+                            Text(
+                                text = item.name,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = currentFontFamily,
+                                maxLines = 1,
+                                fontSize = fontSize,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+                                softWrap = false,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Read button — opens the center book
+            val centerBook = bookItems.getOrNull(centerIndex)
+            if (centerBook != null) {
+                Spacer(modifier = Modifier.height(0.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        onClick = { onBookSelected(centerBook.name, 1) },
+                        shape = RoundedCornerShape(50.dp),
+                        color = Color.White,
+                        modifier = Modifier.height(44.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 36.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Read",
+                                color = Color.Black,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = currentFontFamily
+                            )
+                        }
+                    }
+                }
+
+                // Reading Progress
+                Spacer(modifier = Modifier.height(20.dp))
+                val readCount   = getReadCount(centerBook.name)
+                val totalCount  = getTotalCount(centerBook.name).coerceAtLeast(1)
+                val progress    = readCount / totalCount.toFloat()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         Text(
-                            text = item.name,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontSize = 16.sp,
+                            text = "Reading Progress",
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = currentFontFamily
+                        )
+                        Text(
+                            text = "$readCount / $totalCount",
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = currentFontFamily
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    // Custom tall progress bar with percentage label inside
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(28.dp)
+                            .clip(RoundedCornerShape(50.dp))
+                            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
+                    ) {
+                        // Fill
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                .background(MaterialTheme.colorScheme.onBackground)
+                        )
+                        // Percentage label centered inside
+                        Text(
+                            text = "${(progress * 100).toInt()}%",
+                            color = if (progress > 0.5f)
+                                MaterialTheme.colorScheme.background
+                            else
+                                MaterialTheme.colorScheme.onBackground,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = currentFontFamily,
-                            lineHeight = 17.sp,
-                            maxLines = 2,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.width(cardWidth)
+                            modifier = Modifier.align(Alignment.Center)
                         )
                     }
                 }
             }
 
-            // Chapter picker for expanded book
-            val expandedItem = bookItems.firstOrNull { it.name == expandedBook }
-            AnimatedVisibility(
-                visible = expandedItem != null,
-                enter = fadeIn(tween(200)) + expandVertically(tween(250)),
-                exit  = fadeOut(tween(150)) + shrinkVertically(tween(200))
-            ) {
-                expandedItem?.let { item ->
-                    val chapters = BIBLE_BOOKS[item.name] ?: 1
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        (1..chapters).forEach { chapter ->
-                            Surface(
-                                onClick = { onBookSelected(item.name, chapter) },
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f),
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = chapter.toString(),
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = currentFontFamily
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }

@@ -277,6 +277,35 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         return BibleRepository(db.verseDao(), db.bookmarkDao())
     }
 
+    // Read chapters: Set of "Book-chapter" keys e.g. "Genesis-1"
+    val readChapters = androidx.compose.runtime.mutableStateSetOf<String>().apply {
+        val saved = prefs.getStringSet("read_chapters", emptySet()) ?: emptySet()
+        addAll(saved)
+    }
+
+    fun markChapterRead(book: String, chapter: Int) {
+        val key = "$book-$chapter"
+        if (readChapters.add(key)) {
+            prefs.edit().putStringSet("read_chapters", readChapters.toSet()).apply()
+        }
+    }
+
+    fun unmarkChapterRead(book: String, chapter: Int) {
+        val key = "$book-$chapter"
+        if (readChapters.remove(key)) {
+            prefs.edit().putStringSet("read_chapters", readChapters.toSet()).apply()
+        }
+    }
+
+    fun isChapterRead(book: String, chapter: Int): Boolean =
+        readChapters.contains("$book-$chapter")
+
+    fun readChapterCount(book: String): Int =
+        readChapters.count { it.startsWith("$book-") }
+
+    fun totalChapterCount(book: String): Int =
+        CHAPTER_COUNT[book] ?: 1
+
     fun applyHighlight(verseKeys: Set<String>, color: Color) {
         verseKeys.forEach { highlights[it] = color }
         saveHighlights()
@@ -287,3 +316,24 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         saveHighlights()
     }
 }
+
+// Chapter counts mirrored from ScriptureScreen — used for progress calculation
+val CHAPTER_COUNT = mapOf(
+    "Genesis" to 50, "Exodo" to 40, "Levitico" to 27, "Mga Bilang" to 36,
+    "Deuteronomio" to 34, "Josue" to 24, "Mga Hukom" to 21, "Ruth" to 4,
+    "1 Samuel" to 31, "2 Samuel" to 24, "1 Mga Hari" to 22, "2 Mga Hari" to 25,
+    "1 Mga Cronica" to 29, "2 Mga Cronica" to 36, "Ezra" to 10, "Nehemias" to 13,
+    "Ester" to 10, "Job" to 42, "Mga Awit" to 150, "Mga Kawikaan" to 31,
+    "Ang Mangangaral" to 12, "Ang Awit ni Solomon" to 8, "Isaias" to 66,
+    "Jeremias" to 52, "Mga Panaghoy" to 5, "Ezekiel" to 48, "Daniel" to 12,
+    "Hosea" to 14, "Joel" to 3, "Amos" to 9, "Obadias" to 1, "Jonas" to 4,
+    "Mikas" to 7, "Nahum" to 3, "Habakuk" to 3, "Zefanias" to 3, "Hagai" to 2,
+    "Zacarias" to 14, "Malakias" to 4,
+    "Mateo" to 28, "Marcos" to 16, "Lucas" to 24, "Juan" to 21, "Mga Gawa" to 28,
+    "Mga Taga-Roma" to 16, "1 Mga Taga-Corinto" to 16, "2 Mga Taga-Corinto" to 13,
+    "Mga Taga-Galacia" to 6, "Mga Taga-Efeso" to 6, "Mga Taga-Filipos" to 4,
+    "Mga Taga-Colosas" to 4, "1 Mga Taga-Tesalonica" to 5, "2 Mga Taga-Tesalonica" to 3,
+    "1 Timoteo" to 6, "2 Timoteo" to 4, "Tito" to 3, "Filemon" to 1,
+    "Mga Hebreo" to 13, "Santiago" to 5, "1 Pedro" to 5, "2 Pedro" to 3,
+    "1 Juan" to 5, "2 Juan" to 1, "3 Juan" to 1, "Judas" to 1, "Pahayag" to 22
+)
