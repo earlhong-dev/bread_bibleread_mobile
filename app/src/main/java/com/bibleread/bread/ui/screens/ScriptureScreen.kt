@@ -1459,15 +1459,113 @@ fun BookSelectionOverlay(
                 // ── List view ─────────────────────────────────────────────────
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(bottom = 120.dp)
+                    contentPadding = PaddingValues(
+                        start = 16.dp, end = 16.dp, bottom = 120.dp, top = 4.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(bookItems) { item ->
-                        BookRow(
-                            book = item.name,
-                            isExpanded = expandedBook == item.name,
-                            onToggle = { expandedBook = if (expandedBook == item.name) null else item.name },
-                            onChapterSelected = { chapter -> onBookSelected(item.name, chapter) }
-                        )
+                        val totalChapters = BIBLE_BOOKS[item.name] ?: 1
+                        val readCount = getReadCount(item.name)
+                        val progress = readCount / totalChapters.toFloat()
+
+                        Surface(
+                            onClick = { onBookSelected(item.name, 1) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(1.dp)
+                            ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = item.name,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontFamily = currentFontFamily,
+                                            maxLines = 2,
+                                            lineHeight = 20.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = item.section,
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                                            fontSize = 12.sp,
+                                            fontFamily = currentFontFamily
+                                        )
+                                    }
+                                    Text(
+                                        text = "$totalChapters Chapters",
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = currentFontFamily
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Reading Progress",
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = currentFontFamily
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "$readCount/$totalChapters",
+                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontFamily = currentFontFamily
+                                            )
+                                            Text(
+                                                text = "|",
+                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
+                                                fontSize = 11.sp,
+                                                fontFamily = currentFontFamily
+                                            )
+                                            Text(
+                                                text = "${(progress * 100).toInt()}%",
+                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontFamily = currentFontFamily
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(9.dp)
+                                            .clip(RoundedCornerShape(50.dp))
+                                            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                                .background(MaterialTheme.colorScheme.onBackground)
+                                        )
+                                    }
+                            }
+                        }
                     }
                 }
             }
