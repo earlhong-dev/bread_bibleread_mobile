@@ -286,6 +286,22 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         bibleViewMode = mode
         prefs.edit().putString("bible_view_mode", mode).apply()
     }
+
+    // Bible tab last selected filter — session only (not persisted)
+    var bibleSelectedFilter by mutableStateOf("All Books")
+        private set
+
+    fun saveBibleFilter(filter: String) {
+        bibleSelectedFilter = filter
+    }
+
+    // Bible tab last carousel index — session only (not persisted)
+    var bibleCarouselIndex by mutableStateOf(0)
+        private set
+
+    fun saveBibleCarouselIndex(index: Int) {
+        bibleCarouselIndex = index
+    }
     val readChapters = androidx.compose.runtime.mutableStateSetOf<String>().apply {
         val saved = prefs.getStringSet("read_chapters", emptySet()) ?: emptySet()
         addAll(saved)

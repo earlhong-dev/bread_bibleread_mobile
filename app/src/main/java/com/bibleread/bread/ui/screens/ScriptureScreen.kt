@@ -843,11 +843,15 @@ fun BookSelectionOverlay(
     getReadCount: (String) -> Int = { 0 },
     getTotalCount: (String) -> Int = { 1 },
     initialViewMode: String = "carousel",
-    onViewModeChange: (String) -> Unit = {}
+    onViewModeChange: (String) -> Unit = {},
+    initialFilter: String = "All Books",
+    onFilterChange: (String) -> Unit = {},
+    initialCarouselIndex: Int = 0,
+    onCarouselIndexChange: (Int) -> Unit = {}
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var expandedBook by remember { mutableStateOf<String?>(null) }
-    var selectedFilter by remember { mutableStateOf("All Books") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var expandedBook by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedFilter by rememberSaveable { mutableStateOf(initialFilter) }
 
     val currentFontFamily = remember(fontStyle, customFonts) {
         getFontFamily(fontStyle, customFonts)
@@ -1014,10 +1018,18 @@ fun BookSelectionOverlay(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Hoisted here so filter chips can scroll carousel to top
-        val carouselListState = rememberLazyListState()
+        val carouselListState = rememberLazyListState(
+            initialFirstVisibleItemIndex = initialCarouselIndex
+        )
         val carouselScope = rememberCoroutineScope()
+        // Only reset to 0 when user actively changes the filter (not on first load)
+        var filterInitialized by remember { mutableStateOf(false) }
         LaunchedEffect(selectedFilter) {
-            carouselListState.scrollToItem(0)
+            if (filterInitialized) {
+                carouselListState.scrollToItem(0)
+            } else {
+                filterInitialized = true
+            }
         }
 
         // ── Filter chips ──────────────────────────────────────────────────────
@@ -1032,7 +1044,7 @@ fun BookSelectionOverlay(
             items(primaryFilters) { filter ->
                 val isSelected = selectedFilter == filter
                 Surface(
-                    onClick = { selectedFilter = filter; expandedBook = null },
+                    onClick = { selectedFilter = filter; expandedBook = null; onFilterChange(filter) },
                     shape = RoundedCornerShape(50.dp),
                     color = if (isSelected)
                         MaterialTheme.colorScheme.onBackground
@@ -1058,7 +1070,7 @@ fun BookSelectionOverlay(
                 }
             }
 
-            // Separator line
+            // Separator
             item {
                 Box(
                     modifier = Modifier
@@ -1071,7 +1083,7 @@ fun BookSelectionOverlay(
             items(genreFilters) { filter ->
                 val isSelected = selectedFilter == filter
                 Surface(
-                    onClick = { selectedFilter = filter; expandedBook = null },
+                    onClick = { selectedFilter = filter; expandedBook = null; onFilterChange(filter) },
                     shape = RoundedCornerShape(50.dp),
                     color = if (isSelected)
                         MaterialTheme.colorScheme.onBackground
@@ -1145,7 +1157,7 @@ fun BookSelectionOverlay(
             }
         } else {
             // ── Carousel / List toggle ─────────────────────────────────────────
-            var viewMode by remember { mutableStateOf(initialViewMode) }
+            var viewMode by rememberSaveable { mutableStateOf(initialViewMode) }
 
             val listState = carouselListState
             val density   = LocalDensity.current
@@ -1198,6 +1210,7 @@ fun BookSelectionOverlay(
                     currentLabel = newLabel
                 }
                 prevCenterIndex = centerIndex
+                onCarouselIndexChange(centerIndex)
                 // Close chapter picker if center moved away from expanded book
                 if (expandedBook != null && bookItems.getOrNull(centerIndex)?.name != expandedBook) {
                     expandedBook = null

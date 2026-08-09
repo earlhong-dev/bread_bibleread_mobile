@@ -327,7 +327,11 @@ fun MainApp(dbReady: State<Boolean>) {
                     getReadCount = { book -> bibleVm.readChapterCount(book) },
                     getTotalCount = { book -> bibleVm.totalChapterCount(book) },
                     initialViewMode = bibleVm.bibleViewMode,
-                    onViewModeChange = { bibleVm.saveBibleViewMode(it) }
+                    onViewModeChange = { bibleVm.saveBibleViewMode(it) },
+                    initialFilter = bibleVm.bibleSelectedFilter,
+                    onFilterChange = { bibleVm.saveBibleFilter(it) },
+                    initialCarouselIndex = bibleVm.bibleCarouselIndex,
+                    onCarouselIndexChange = { bibleVm.saveBibleCarouselIndex(it) }
                 )
             }
             // Scripture viewer — shown after selecting a book
