@@ -1142,7 +1142,9 @@ fun BookSelectionOverlay(
                 }
             }
         } else {
-            // ── Carousel ──────────────────────────────────────────────────────
+            // ── Carousel / List toggle ─────────────────────────────────────────
+            var viewMode by remember { mutableStateOf("carousel") } // "carousel" or "list"
+
             val listState = carouselListState
             val density   = LocalDensity.current
 
@@ -1191,30 +1193,59 @@ fun BookSelectionOverlay(
             }
 
             // Genre label with directional slide transition
-            AnimatedContent(
-                targetState = currentLabel,
-                transitionSpec = {
-                    if (slideFromRight) {
-                        slideInHorizontally { it } + fadeIn() togetherWith
-                        slideOutHorizontally { -it } + fadeOut()
-                    } else {
-                        slideInHorizontally { -it } + fadeIn() togetherWith
-                        slideOutHorizontally { it } + fadeOut()
-                    }
-                },
-                label = "genreLabel"
-            ) { label ->
-                Text(
-                    text = label,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = currentFontFamily,
-                    letterSpacing = 0.5.sp,
-                    modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp)
-                )
+            // Genre label row — label animates, button stays fixed
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AnimatedContent(
+                    targetState = currentLabel,
+                    transitionSpec = {
+                        if (slideFromRight) {
+                            slideInHorizontally { it } + fadeIn() togetherWith
+                            slideOutHorizontally { -it } + fadeOut()
+                        } else {
+                            slideInHorizontally { -it } + fadeIn() togetherWith
+                            slideOutHorizontally { it } + fadeOut()
+                        }
+                    },
+                    label = "genreLabel",
+                    modifier = Modifier.weight(1f)
+                ) { label ->
+                    Text(
+                        text = label,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = currentFontFamily,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                // View toggle — outside AnimatedContent so it doesn't slide
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { viewMode = if (viewMode == "carousel") "list" else "carousel" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (viewMode == "carousel") R.drawable.ic_list_view
+                            else R.drawable.ic_book_view
+                        ),
+                        contentDescription = "Toggle view",
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
 
+            if (viewMode == "carousel") {
             // Carousel
             LazyRow(
                 state = listState,
@@ -1398,7 +1429,7 @@ fun BookSelectionOverlay(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(28.dp)
+                            .height(22.dp)
                             .clip(RoundedCornerShape(50.dp))
                             .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
                     ) {
@@ -1420,6 +1451,22 @@ fun BookSelectionOverlay(
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = currentFontFamily,
                             modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
+                }
+            }
+            } else {
+                // ── List view ─────────────────────────────────────────────────
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(bottom = 120.dp)
+                ) {
+                    items(bookItems) { item ->
+                        BookRow(
+                            book = item.name,
+                            isExpanded = expandedBook == item.name,
+                            onToggle = { expandedBook = if (expandedBook == item.name) null else item.name },
+                            onChapterSelected = { chapter -> onBookSelected(item.name, chapter) }
                         )
                     }
                 }
