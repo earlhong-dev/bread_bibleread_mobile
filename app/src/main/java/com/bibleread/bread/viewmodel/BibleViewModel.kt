@@ -277,7 +277,15 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         return BibleRepository(db.verseDao(), db.bookmarkDao())
     }
 
-    // Read chapters: Set of "Book-chapter" keys e.g. "Genesis-1"
+    // Bible tab view mode: "carousel" or "list"
+    var bibleViewMode by mutableStateOf(prefs.getString("bible_view_mode", "carousel") ?: "carousel")
+        private set
+
+    fun saveBibleViewMode(mode: String) {
+        if (mode == bibleViewMode) return
+        bibleViewMode = mode
+        prefs.edit().putString("bible_view_mode", mode).apply()
+    }
     val readChapters = androidx.compose.runtime.mutableStateSetOf<String>().apply {
         val saved = prefs.getStringSet("read_chapters", emptySet()) ?: emptySet()
         addAll(saved)

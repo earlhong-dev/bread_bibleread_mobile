@@ -841,7 +841,9 @@ fun BookSelectionOverlay(
     fontStyle: String = "Default",
     customFonts: List<java.io.File> = emptyList(),
     getReadCount: (String) -> Int = { 0 },
-    getTotalCount: (String) -> Int = { 1 }
+    getTotalCount: (String) -> Int = { 1 },
+    initialViewMode: String = "carousel",
+    onViewModeChange: (String) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var expandedBook by remember { mutableStateOf<String?>(null) }
@@ -1143,7 +1145,7 @@ fun BookSelectionOverlay(
             }
         } else {
             // ── Carousel / List toggle ─────────────────────────────────────────
-            var viewMode by remember { mutableStateOf("carousel") } // "carousel" or "list"
+            var viewMode by remember { mutableStateOf(initialViewMode) }
 
             val listState = carouselListState
             val density   = LocalDensity.current
@@ -1170,6 +1172,16 @@ fun BookSelectionOverlay(
             var currentLabel by remember { mutableStateOf(bookItems.getOrNull(0)?.section ?: "") }
             var slideFromRight by remember { mutableStateOf(true) }
             var prevCenterIndex by remember { mutableIntStateOf(0) }
+
+            // In list view, override label for primary filters
+            val displayLabel = if (viewMode == "list") {
+                when (selectedFilter) {
+                    "All Books"    -> "All"
+                    "Old Testament"-> "Old"
+                    "New Testament"-> "New"
+                    else           -> selectedFilter
+                }
+            } else currentLabel
 
             // Reset label when filter changes (bookItems changes, center goes back to 0)
             LaunchedEffect(bookItems) {
@@ -1201,7 +1213,7 @@ fun BookSelectionOverlay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AnimatedContent(
-                    targetState = currentLabel,
+                    targetState = displayLabel,
                     transitionSpec = {
                         if (slideFromRight) {
                             slideInHorizontally { it } + fadeIn() togetherWith
@@ -1230,7 +1242,8 @@ fun BookSelectionOverlay(
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
-                        ) { viewMode = if (viewMode == "carousel") "list" else "carousel" },
+                        ) { viewMode = if (viewMode == "carousel") "list" else "carousel"
+                               onViewModeChange(viewMode) },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -1411,14 +1424,14 @@ fun BookSelectionOverlay(
                     ) {
                         Text(
                             text = "Reading Progress",
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = currentFontFamily
                         )
                         Text(
                             text = "$readCount / $totalCount",
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = currentFontFamily
@@ -1518,7 +1531,7 @@ fun BookSelectionOverlay(
                                     ) {
                                         Text(
                                             text = "Reading Progress",
-                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                            color = MaterialTheme.colorScheme.onBackground,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             fontFamily = currentFontFamily
@@ -1529,7 +1542,7 @@ fun BookSelectionOverlay(
                                         ) {
                                             Text(
                                                 text = "$readCount/$totalChapters",
-                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                                color = MaterialTheme.colorScheme.onBackground,
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontFamily = currentFontFamily
@@ -1542,7 +1555,7 @@ fun BookSelectionOverlay(
                                             )
                                             Text(
                                                 text = "${(progress * 100).toInt()}%",
-                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                                                color = MaterialTheme.colorScheme.onBackground,
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontFamily = currentFontFamily

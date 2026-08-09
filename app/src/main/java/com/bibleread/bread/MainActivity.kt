@@ -325,7 +325,9 @@ fun MainApp(dbReady: State<Boolean>) {
                     fontStyle = bibleVm.fontStyle,
                     customFonts = bibleVm.customFonts,
                     getReadCount = { book -> bibleVm.readChapterCount(book) },
-                    getTotalCount = { book -> bibleVm.totalChapterCount(book) }
+                    getTotalCount = { book -> bibleVm.totalChapterCount(book) },
+                    initialViewMode = bibleVm.bibleViewMode,
+                    onViewModeChange = { bibleVm.saveBibleViewMode(it) }
                 )
             }
             // Scripture viewer — shown after selecting a book
