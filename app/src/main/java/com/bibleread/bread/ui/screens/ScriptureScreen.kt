@@ -1018,19 +1018,10 @@ fun BookSelectionOverlay(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Hoisted here so filter chips can scroll carousel to top
-        val carouselListState = rememberLazyListState(
-            initialFirstVisibleItemIndex = initialCarouselIndex
-        )
-        val carouselScope = rememberCoroutineScope()
-        // Only reset to 0 when user actively changes the filter (not on first load)
-        var filterInitialized by remember { mutableStateOf(false) }
-        LaunchedEffect(selectedFilter) {
-            if (filterInitialized) {
-                carouselListState.scrollToItem(0)
-            } else {
-                filterInitialized = true
-            }
+        val carouselListState = remember(selectedFilter) {
+            androidx.compose.foundation.lazy.LazyListState(0, 0)
         }
+        val carouselScope = rememberCoroutineScope()
 
         // ── Filter chips ──────────────────────────────────────────────────────
         val primaryFilters = listOf("All Books", "Old Testament", "New Testament")
@@ -1170,9 +1161,9 @@ fun BookSelectionOverlay(
             val spacingPx    = with(density) { spacing.toPx() }
 
             // Derive center index from scroll state
-            val centerIndex by remember {
+            val centerIndex by remember(carouselListState) {
                 derivedStateOf {
-                    val layoutInfo   = listState.layoutInfo
+                    val layoutInfo   = carouselListState.layoutInfo
                     val viewportMid  = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
                     layoutInfo.visibleItemsInfo
                         .minByOrNull { kotlin.math.abs((it.offset + it.size / 2f) - viewportMid) }
@@ -1180,10 +1171,8 @@ fun BookSelectionOverlay(
                 }
             }
 
-            // Track label changes and scroll direction for slide animation
+            // Track label changes for slide animation
             var currentLabel by remember { mutableStateOf(bookItems.getOrNull(0)?.section ?: "") }
-            var slideFromRight by remember { mutableStateOf(true) }
-            var prevCenterIndex by remember { mutableIntStateOf(0) }
 
             // In list view, override label for primary filters
             val displayLabel = if (viewMode == "list") {
@@ -1198,18 +1187,14 @@ fun BookSelectionOverlay(
             // Reset label when filter changes (bookItems changes, center goes back to 0)
             LaunchedEffect(bookItems) {
                 val newLabel = bookItems.getOrNull(0)?.section ?: ""
-                slideFromRight = true
                 currentLabel = newLabel
-                prevCenterIndex = 0
             }
 
-            LaunchedEffect(centerIndex) {
+            LaunchedEffect(centerIndex, viewMode, bookItems) {
                 val newLabel = bookItems.getOrNull(centerIndex)?.section ?: ""
-                if (newLabel != currentLabel) {
-                    slideFromRight = centerIndex > prevCenterIndex
+                if (newLabel.isNotEmpty()) {
                     currentLabel = newLabel
                 }
-                prevCenterIndex = centerIndex
                 onCarouselIndexChange(centerIndex)
                 // Close chapter picker if center moved away from expanded book
                 if (expandedBook != null && bookItems.getOrNull(centerIndex)?.name != expandedBook) {
@@ -1217,7 +1202,7 @@ fun BookSelectionOverlay(
                 }
             }
 
-            // Genre label with directional slide transition
+            // Genre label with slide transition always coming from the right
             // Genre label row — label animates, button stays fixed
             Row(
                 modifier = Modifier
@@ -1228,13 +1213,9 @@ fun BookSelectionOverlay(
                 AnimatedContent(
                     targetState = displayLabel,
                     transitionSpec = {
-                        if (slideFromRight) {
-                            slideInHorizontally { it } + fadeIn() togetherWith
+                        (slideInHorizontally { it } + fadeIn()).togetherWith(
                             slideOutHorizontally { -it } + fadeOut()
-                        } else {
-                            slideInHorizontally { -it } + fadeIn() togetherWith
-                            slideOutHorizontally { it } + fadeOut()
-                        }
+                        )
                     },
                     label = "genreLabel",
                     modifier = Modifier.weight(1f)
@@ -1495,23 +1476,35 @@ fun BookSelectionOverlay(
             } else {
                 // ── List view ─────────────────────────────────────────────────
                 val density = LocalDensity.current
+                val filterKey = "$selectedFilter-$searchQuery"
+                val listViewState = remember(filterKey) { androidx.compose.foundation.lazy.LazyListState(0, 0) }
+                var initialStaggerDone by remember(filterKey) { mutableStateOf(false) }
+                LaunchedEffect(filterKey) {
+                    delay(450)
+                    initialStaggerDone = true
+                }
+
                 LazyColumn(
+                    state = listViewState,
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(
                         start = 16.dp, end = 16.dp, bottom = 120.dp, top = 4.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    itemsIndexed(bookItems) { index, item ->
+                    itemsIndexed(bookItems, key = { _, item -> "$filterKey-${item.name}" }) { index, item ->
                         val totalChapters = BIBLE_BOOKS[item.name] ?: 1
                         val readCount = getReadCount(item.name)
                         val progress = readCount / totalChapters.toFloat()
 
-                        // Staggered entrance — each card delays by 40ms × index, capped at 8 cards
-                        var visible by remember { mutableStateOf(false) }
-                        LaunchedEffect(item.name) {
-                            delay((index.coerceAtMost(8) * 50).toLong())
-                            visible = true
+                        // Staggered entrance plays every time filter changes for top 8 cards; offscreen/scrolled cards show immediately
+                        val shouldShowInstantly = initialStaggerDone || index >= 8
+                        var visible by remember(filterKey, item.name, shouldShowInstantly) { mutableStateOf(shouldShowInstantly) }
+                        LaunchedEffect(filterKey, item.name, shouldShowInstantly) {
+                            if (!visible) {
+                                delay((index.coerceAtMost(8) * 50).toLong())
+                                visible = true
+                            }
                         }
                         val animAlpha by animateFloatAsState(
                             targetValue = if (visible) 1f else 0f,
