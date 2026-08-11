@@ -1123,37 +1123,20 @@ fun BookSelectionOverlay(
             else             -> allSections
         }
 
-        fun getBookSectionLabel(bookName: String): String {
-            return allSections.firstOrNull { it.books.contains(bookName) }?.label ?: ""
-        }
-
         // Flat list of books only (no label items — label shown above separately)
         val bookItems: List<BookListItem.Book> = if (isSearching) {
-            rankedResults.map { BookListItem.Book(it, getBookSectionLabel(it)) }
+            rankedResults.map { BookListItem.Book(it, "") }
         } else {
             sectionsToShow.flatMap { section ->
                 section.books.map { BookListItem.Book(it, section.label) }
             }
         }
 
-        // ── Carousel / List view for books & search ──────────────────────────────────
-        var viewMode by remember { mutableStateOf(initialViewMode) }
-
-        if (bookItems.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 40.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isSearching) "No books found" else "No books available",
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                    fontSize = 15.sp,
-                    fontFamily = currentFontFamily
-                )
-            }
-        } else {
+        run {
+            // ── Carousel / List toggle ─────────────────────────────────────────
+            var viewMode by remember { mutableStateOf(initialViewMode) }
+            // When searching, always use list view
+            val effectiveViewMode = if (isSearching) "list" else viewMode
 
             val listState = carouselListState
             val density   = LocalDensity.current
@@ -1179,8 +1162,8 @@ fun BookSelectionOverlay(
             // Track label changes for slide animation
             var currentLabel by remember { mutableStateOf(bookItems.getOrNull(0)?.section ?: "") }
 
-            // In list view, override label for primary filters
-            val displayLabel = if (viewMode == "list") {
+            // In list view (or searching), override label for primary filters
+            val displayLabel = if (effectiveViewMode == "list") {
                 when (selectedFilter) {
                     "All Books"    -> "All"
                     "Old Testament"-> "Old"
@@ -1208,57 +1191,55 @@ fun BookSelectionOverlay(
             }
 
             // Genre label row — hidden when searching
-            if (!isSearching) {
-                Row(
+            if (!isSearching) Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AnimatedContent(
+                    targetState = displayLabel,
+                    transitionSpec = {
+                        (slideInHorizontally { it } + fadeIn()).togetherWith(
+                            slideOutHorizontally { -it } + fadeOut()
+                        )
+                    },
+                    label = "genreLabel",
+                    modifier = Modifier.weight(1f)
+                ) { label ->
+                    Text(
+                        text = label,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = currentFontFamily,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                // View toggle — outside AnimatedContent so it doesn't slide, hidden when searching
+                if (!isSearching) Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .size(32.dp)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { viewMode = if (viewMode == "carousel") "list" else "carousel"
+                               onViewModeChange(viewMode) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    AnimatedContent(
-                        targetState = displayLabel,
-                        transitionSpec = {
-                            (slideInHorizontally { it } + fadeIn()).togetherWith(
-                                slideOutHorizontally { -it } + fadeOut()
-                            )
-                        },
-                        label = "genreLabel",
-                        modifier = Modifier.weight(1f)
-                    ) { label ->
-                        Text(
-                            text = label,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = currentFontFamily,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    // View toggle — outside AnimatedContent so it doesn't slide
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null
-                            ) { viewMode = if (viewMode == "carousel") "list" else "carousel"
-                                   onViewModeChange(viewMode) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(
-                                if (viewMode == "carousel") R.drawable.ic_list_view
-                                else R.drawable.ic_book_view
-                            ),
-                            contentDescription = "Toggle view",
-                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Icon(
+                        painter = painterResource(
+                            if (viewMode == "carousel") R.drawable.ic_list_view
+                            else R.drawable.ic_book_view
+                        ),
+                        contentDescription = "Toggle view",
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 
-            if (viewMode == "carousel") {
+            if (effectiveViewMode == "carousel") {
                 // Fade in on first load
                 var carouselVisible by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { carouselVisible = true }
@@ -1480,7 +1461,7 @@ fun BookSelectionOverlay(
                     } // end Column inside AnimatedVisibility
                 } // end AnimatedVisibility — carousel + read button + progress all fade in together
             } else {
-                // ── List view ─────────────────────────────────────────────────
+                // ── List view (and search results) ────────────────────────────
                 val density = LocalDensity.current
                 val filterKey = "$selectedFilter-$searchQuery"
                 val listViewState = remember(filterKey) { androidx.compose.foundation.lazy.LazyListState(0, 0) }
