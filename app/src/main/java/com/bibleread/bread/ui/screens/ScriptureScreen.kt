@@ -996,20 +996,32 @@ fun BookSelectionOverlay(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                // Always reserve space; invisible when empty
-                IconButton(
-                    onClick = { searchQuery = "" },
-                    modifier = Modifier.size(20.dp),
-                    enabled = searchQuery.isNotEmpty()
+                // Clear button — circle with X icon, white background in dark mode
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (searchQuery.isNotEmpty())
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)
+                            else Color.Transparent
+                        )
+                        .clickable(
+                            enabled = searchQuery.isNotEmpty(),
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = { searchQuery = "" }
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         painterResource(R.drawable.ic_close),
                         contentDescription = "Clear",
                         tint = if (searchQuery.isNotEmpty())
-                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                            MaterialTheme.colorScheme.onBackground
                         else
                             Color.Transparent,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(11.dp)
                     )
                 }
             }
