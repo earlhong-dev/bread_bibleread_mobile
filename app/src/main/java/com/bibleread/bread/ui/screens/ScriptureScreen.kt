@@ -849,9 +849,9 @@ fun BookSelectionOverlay(
     initialCarouselIndex: Int = 0,
     onCarouselIndexChange: (Int) -> Unit = {}
 ) {
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var expandedBook by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedFilter by rememberSaveable { mutableStateOf(initialFilter) }
+    var searchQuery by remember { mutableStateOf("") }
+    var expandedBook by remember { mutableStateOf<String?>(null) }
+    var selectedFilter by remember { mutableStateOf(initialFilter) }
 
     val currentFontFamily = remember(fontStyle, customFonts) {
         getFontFamily(fontStyle, customFonts)
@@ -1157,7 +1157,7 @@ fun BookSelectionOverlay(
             }
         } else {
             // ── Carousel / List toggle ─────────────────────────────────────────
-            var viewMode by rememberSaveable { mutableStateOf(initialViewMode) }
+            var viewMode by remember { mutableStateOf(initialViewMode) }
 
             val listState = carouselListState
             val density   = LocalDensity.current
@@ -1272,217 +1272,229 @@ fun BookSelectionOverlay(
             }
 
             if (viewMode == "carousel") {
-            // Carousel
-            LazyRow(
-                state = listState,
-                contentPadding = PaddingValues(
-                    horizontal = (LocalConfiguration.current.screenWidthDp.dp - cardWidth) / 2,
-                    vertical = 16.dp
-                ),
-                horizontalArrangement = Arrangement.spacedBy(spacing),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight(),
-                flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-            ) {
-                itemsIndexed(bookItems) { index, item ->
-                    val distFromCenter by remember {
-                        derivedStateOf {
-                            val layoutInfo  = listState.layoutInfo
-                            val viewportMid = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
-                            val info = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-                            if (info != null) {
-                                val itemMid = info.offset + info.size / 2f
-                                kotlin.math.abs(itemMid - viewportMid) / (cardWidthPx + spacingPx)
-                            } else 1f
+                // Fade in on first load
+                var carouselVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { carouselVisible = true }
+
+                AnimatedVisibility(
+                    visible = carouselVisible,
+                    enter = fadeIn(animationSpec = tween(500))
+                ) {
+                    Column {
+                        // Carousel
+                        LazyRow(
+                            state = listState,
+                            contentPadding = PaddingValues(
+                                horizontal = (LocalConfiguration.current.screenWidthDp.dp - cardWidth) / 2,
+                                vertical = 16.dp
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(),
+                            flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+                        ) {
+                            itemsIndexed(bookItems) { index, item ->
+                                val distFromCenter by remember {
+                                    derivedStateOf {
+                                        val layoutInfo  = listState.layoutInfo
+                                        val viewportMid = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+                                        val info = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                                        if (info != null) {
+                                            val itemMid = info.offset + info.size / 2f
+                                            kotlin.math.abs(itemMid - viewportMid) / (cardWidthPx + spacingPx)
+                                        } else 1f
+                                    }
+                                }
+                                val scale = lerp(1f, 0.78f, distFromCenter.coerceIn(0f, 1f))
+                                val alpha = lerp(1f, 0.5f, distFromCenter.coerceIn(0f, 1f))
+
+                                val cardColor = when (item.section) {
+                                    "Law"           -> Color(0xFF7EC8E3)
+                                    "History"       -> Color(0xFF8B5E3C)
+                                    "Poetry"        -> Color(0xFF4CAF50)
+                                    "Prophets"      -> Color(0xFFFFD54F)
+                                    "Gospels"       -> Color(0xFF9C27B0)
+                                    "Church History"-> Color(0xFF1976D2)
+                                    "Letters"       -> Color(0xFFF48FB1)
+                                    "Prophecy"      -> Color(0xFFFF7043)
+                                    else            -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)
+                                }
+
+                                val cardImageRes = when (item.section) {
+                                    "Law"           -> R.drawable.books_law
+                                    "History"       -> R.drawable.books_history
+                                    "Poetry"        -> R.drawable.books_poetry
+                                    "Prophets"      -> R.drawable.books_prophets
+                                    "Gospels"       -> R.drawable.books_gospels
+                                    "Church History"-> R.drawable.books_church
+                                    "Letters"       -> R.drawable.books_letters
+                                    "Prophecy"      -> R.drawable.books_prophecy
+                                    else            -> null
+                                }
+
+                                Column(
+                                    modifier = Modifier
+                                        .width(cardWidth)
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                            this.alpha = alpha
+                                        },
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    // Card — image only, scroll left/right on side taps, no open
+                                    val cardModifier = Modifier
+                                        .width(cardWidth)
+                                        .height(cardHeight)
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            when {
+                                                index < centerIndex -> carouselScope.launch {
+                                                    listState.animateScrollToItem((centerIndex - 1).coerceAtLeast(0))
+                                                }
+                                                index > centerIndex -> carouselScope.launch {
+                                                    listState.animateScrollToItem((centerIndex + 1).coerceAtMost(bookItems.lastIndex))
+                                                }
+                                                // center — no action, Read button handles opening
+                                            }
+                                        }
+
+                                    if (cardImageRes != null) {
+                                        Image(
+                                            painter = painterResource(id = cardImageRes),
+                                            contentDescription = item.section,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = cardModifier
+                                        )
+                                    } else {
+                                        Box(modifier = cardModifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)))
+                                    }
+                                    // Book name below card
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    BoxWithConstraints(
+                                        modifier = Modifier.width(cardWidth),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        val availableWidthSp = with(LocalDensity.current) { maxWidth.toSp() }
+                                        val nameLength = item.name.length.coerceAtLeast(1)
+                                        // Estimate: ~0.6sp per char at given size; shrink if needed
+                                        val fontSize = (availableWidthSp.value / (nameLength * 0.62f))
+                                            .coerceIn(8f, 16f).sp
+                                        Text(
+                                            text = item.name,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = currentFontFamily,
+                                            maxLines = 1,
+                                            fontSize = fontSize,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+                                            softWrap = false,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    }
-                    val scale = lerp(1f, 0.78f, distFromCenter.coerceIn(0f, 1f))
-                    val alpha = lerp(1f, 0.5f, distFromCenter.coerceIn(0f, 1f))
 
-                    val cardColor = when (item.section) {
-                        "Law"           -> Color(0xFF7EC8E3)
-                        "History"       -> Color(0xFF8B5E3C)
-                        "Poetry"        -> Color(0xFF4CAF50)
-                        "Prophets"      -> Color(0xFFFFD54F)
-                        "Gospels"       -> Color(0xFF9C27B0)
-                        "Church History"-> Color(0xFF1976D2)
-                        "Letters"       -> Color(0xFFF48FB1)
-                        "Prophecy"      -> Color(0xFFFF7043)
-                        else            -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)
-                    }
-
-                    val cardImageRes = when (item.section) {
-                        "Law"           -> R.drawable.books_law
-                        "History"       -> R.drawable.books_history
-                        "Poetry"        -> R.drawable.books_poetry
-                        "Prophets"      -> R.drawable.books_prophets
-                        "Gospels"       -> R.drawable.books_gospels
-                        "Church History"-> R.drawable.books_church
-                        "Letters"       -> R.drawable.books_letters
-                        "Prophecy"      -> R.drawable.books_prophecy
-                        else            -> null
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .width(cardWidth)
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                                this.alpha = alpha
-                            },
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Card — image only, scroll left/right on side taps, no open
-                        val cardModifier = Modifier
-                            .width(cardWidth)
-                            .height(cardHeight)
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null
+                        // Read button + Reading Progress
+                        val centerBook = bookItems.getOrNull(centerIndex)
+                        if (centerBook != null) {
+                            Spacer(modifier = Modifier.height(0.dp))
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
                             ) {
-                                when {
-                                    index < centerIndex -> carouselScope.launch {
-                                        listState.animateScrollToItem((centerIndex - 1).coerceAtLeast(0))
+                                Surface(
+                                    onClick = { onBookSelected(centerBook.name, 1) },
+                                    shape = RoundedCornerShape(50.dp),
+                                    color = Color.White,
+                                    modifier = Modifier.height(44.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(horizontal = 36.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Read",
+                                            color = Color.Black,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = currentFontFamily
+                                        )
                                     }
-                                    index > centerIndex -> carouselScope.launch {
-                                        listState.animateScrollToItem((centerIndex + 1).coerceAtMost(bookItems.lastIndex))
-                                    }
-                                    // center — no action, Read button handles opening
                                 }
                             }
 
-                        if (cardImageRes != null) {
-                            Image(
-                                painter = painterResource(id = cardImageRes),
-                                contentDescription = item.section,
-                                contentScale = ContentScale.Crop,
-                                modifier = cardModifier
-                            )
-                        } else {
-                            Box(modifier = cardModifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)))
-                        }
-                        // Book name below card
-                        Spacer(modifier = Modifier.height(10.dp))
-                        BoxWithConstraints(
-                            modifier = Modifier.width(cardWidth),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val availableWidthSp = with(LocalDensity.current) { maxWidth.toSp() }
-                            val nameLength = item.name.length.coerceAtLeast(1)
-                            // Estimate: ~0.6sp per char at given size; shrink if needed
-                            val fontSize = (availableWidthSp.value / (nameLength * 0.62f))
-                                .coerceIn(8f, 16f).sp
-                            Text(
-                                text = item.name,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = currentFontFamily,
-                                maxLines = 1,
-                                fontSize = fontSize,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-                                softWrap = false,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
-            }
+                            // Reading Progress
+                            Spacer(modifier = Modifier.height(20.dp))
+                            val readCount   = getReadCount(centerBook.name)
+                            val totalCount  = getTotalCount(centerBook.name).coerceAtLeast(1)
+                            val progress    = readCount / totalCount.toFloat()
 
-            // Read button — opens the center book
-            val centerBook = bookItems.getOrNull(centerIndex)
-            if (centerBook != null) {
-                Spacer(modifier = Modifier.height(0.dp))
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Surface(
-                        onClick = { onBookSelected(centerBook.name, 1) },
-                        shape = RoundedCornerShape(50.dp),
-                        color = Color.White,
-                        modifier = Modifier.height(44.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier.padding(horizontal = 36.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Read",
-                                color = Color.Black,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = currentFontFamily
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Reading Progress",
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = currentFontFamily
+                                    )
+                                    Text(
+                                        text = "$readCount / $totalCount",
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = currentFontFamily
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                // Custom tall progress bar with percentage label inside
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(22.dp)
+                                        .clip(RoundedCornerShape(50.dp))
+                                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
+                                ) {
+                                    // Fill
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                            .background(MaterialTheme.colorScheme.onBackground)
+                                    )
+                                    // Percentage label centered inside
+                                    Text(
+                                        text = "${(progress * 100).toInt()}%",
+                                        color = if (progress > 0.5f)
+                                            MaterialTheme.colorScheme.background
+                                        else
+                                            MaterialTheme.colorScheme.onBackground,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = currentFontFamily,
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
-
-                // Reading Progress
-                Spacer(modifier = Modifier.height(20.dp))
-                val readCount   = getReadCount(centerBook.name)
-                val totalCount  = getTotalCount(centerBook.name).coerceAtLeast(1)
-                val progress    = readCount / totalCount.toFloat()
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Reading Progress",
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = currentFontFamily
-                        )
-                        Text(
-                            text = "$readCount / $totalCount",
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = currentFontFamily
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    // Custom tall progress bar with percentage label inside
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(22.dp)
-                            .clip(RoundedCornerShape(50.dp))
-                            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
-                    ) {
-                        // Fill
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                                .background(MaterialTheme.colorScheme.onBackground)
-                        )
-                        // Percentage label centered inside
-                        Text(
-                            text = "${(progress * 100).toInt()}%",
-                            color = if (progress > 0.5f)
-                                MaterialTheme.colorScheme.background
-                            else
-                                MaterialTheme.colorScheme.onBackground,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = currentFontFamily,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    }
-                }
-            }
+                    } // end Column inside AnimatedVisibility
+                } // end AnimatedVisibility — carousel + read button + progress all fade in together
             } else {
                 // ── List view ─────────────────────────────────────────────────
+                val density = LocalDensity.current
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(
@@ -1490,16 +1502,38 @@ fun BookSelectionOverlay(
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(bookItems) { item ->
+                    itemsIndexed(bookItems) { index, item ->
                         val totalChapters = BIBLE_BOOKS[item.name] ?: 1
                         val readCount = getReadCount(item.name)
                         val progress = readCount / totalChapters.toFloat()
+
+                        // Staggered entrance — each card delays by 40ms × index, capped at 8 cards
+                        var visible by remember { mutableStateOf(false) }
+                        LaunchedEffect(item.name) {
+                            delay((index.coerceAtMost(8) * 50).toLong())
+                            visible = true
+                        }
+                        val animAlpha by animateFloatAsState(
+                            targetValue = if (visible) 1f else 0f,
+                            animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                            label = "cardFade"
+                        )
+                        val animOffsetY by animateFloatAsState(
+                            targetValue = if (visible) 0f else 24f,
+                            animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                            label = "cardSlide"
+                        )
 
                         Surface(
                             onClick = { onBookSelected(item.name, 1) },
                             shape = RoundedCornerShape(16.dp),
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    alpha = animAlpha
+                                    translationY = with(density) { animOffsetY.dp.toPx() }
+                                }
                         ) {
                             Column(
                                 modifier = Modifier

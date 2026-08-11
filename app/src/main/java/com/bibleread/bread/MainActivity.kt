@@ -49,6 +49,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -197,6 +200,12 @@ fun MainApp(dbReady: State<Boolean>) {
     // Book selection
     var bookSelectionCallback by remember { mutableStateOf<((String, Int) -> Unit)?>(null) }
 
+    // Scripture overlay — shown on top of Bible tab without recomposing it
+    var showScripture by remember { mutableStateOf(false) }
+
+    // Appearance overlay — shown on top without recomposing the underlying screen
+    var showAppearance by remember { mutableStateOf(false) }
+
     // Appearance
     val bibleVm: BibleViewModel = viewModel()
 
@@ -251,6 +260,8 @@ fun MainApp(dbReady: State<Boolean>) {
     val showNavBar = currentRoute != null &&
         currentRoute != Screen.Splash.route &&
         currentRoute != Screen.Scripture.route &&
+        !showScripture &&
+        !showAppearance &&
         currentRoute != Screen.Appearance.route &&
         currentRoute != Screen.NewNote.route &&
         currentRoute != Screen.ViewNote.route
@@ -297,56 +308,85 @@ fun MainApp(dbReady: State<Boolean>) {
                             exactAlarmPermissionLauncher.launch(Manifest.permission.SCHEDULE_EXACT_ALARM)
                         }
                         bibleVm.loadChapter(book, chapter)
-                        navController.navigate(Screen.Scripture.route) {
+                        navController.navigate(Screen.Reader.route) {
                             popUpTo(Screen.Splash.route) { inclusive = true }
                         }
+                        showScripture = true
                     }
                 )
             }
             // Bible tab — shows book selection as the entry point
             composable(Screen.Reader.route) {
-                BookSelectionOverlay(
-                    onBookSelected = { book, chapter ->
-                        bibleVm.loadChapter(book, chapter)
-                        if (bookSelectionCallback != null) {
-                            bookSelectionCallback?.invoke(book, chapter)
-                            bookSelectionCallback = null
-                            navController.popBackStack()
-                        } else {
-                            navController.navigate(Screen.Scripture.route)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    BookSelectionOverlay(
+                        onBookSelected = { book, chapter ->
+                            bibleVm.loadChapter(book, chapter)
+                            showScripture = true
+                        },
+                        onOpenAppearance = { showAppearance = true },
+                        onClose = {},
+                        fontStyle = bibleVm.fontStyle,
+                        customFonts = bibleVm.customFonts,
+                        getReadCount = { book -> bibleVm.readChapterCount(book) },
+                        getTotalCount = { book -> bibleVm.totalChapterCount(book) },
+                        initialViewMode = bibleVm.bibleViewMode,
+                        onViewModeChange = { bibleVm.saveBibleViewMode(it) },
+                        initialFilter = "All Books",
+                        onFilterChange = { bibleVm.saveBibleFilter(it) },
+                        initialCarouselIndex = 0,
+                        onCarouselIndexChange = { bibleVm.saveBibleCarouselIndex(it) }
+                    )
+                    // Scripture overlay
+                    if (showScripture) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                                .pointerInput(Unit) { detectTapGestures { } }
+                        ) {
+                        BibleScreen(
+                            vm = bibleVm,
+                            onOpenBookSelection = { onBookSelected ->
+                                bookSelectionCallback = onBookSelected
+                                showScripture = false
+                            },
+                            onOpenAppearance = { showAppearance = true },
+                            onBack = {
+                                if (bookSelectionCallback != null) {
+                                    bookSelectionCallback?.invoke(bibleVm.lastBook, bibleVm.lastChapter)
+                                    bookSelectionCallback = null
+                                }
+                                showScripture = false
+                            }
+                        )
                         }
-                    },
-                    onOpenAppearance = { navController.navigate(Screen.Appearance.route) },
-                    onClose = {
-                        if (navController.previousBackStackEntry != null) {
-                            navController.popBackStack()
+                    }
+                    // Appearance overlay
+                    if (showAppearance) {
+                        val fontFileLauncher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.OpenDocument()
+                        ) { uri -> if (uri != null) bibleVm.importCustomFont(uri) }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                                .pointerInput(Unit) { detectTapGestures { } }
+                        ) {
+                        AppearanceSettingsOverlay(
+                            currentFontSize = bibleVm.fontSize,
+                            onFontSizeChange = { bibleVm.saveFontSize(it) },
+                            currentFontStyle = bibleVm.fontStyle,
+                            onFontStyleChange = { bibleVm.saveFontStyle(it) },
+                            customFonts = bibleVm.customFonts,
+                            selectedThemeIndex = bibleVm.selectedThemeIndex,
+                            onThemeChange = { bibleVm.saveThemeIndex(it) },
+                            onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
+                            onRemoveFont = { bibleVm.removeCustomFont(it) },
+                            onClose = { showAppearance = false }
+                        )
                         }
-                    },
-                    fontStyle = bibleVm.fontStyle,
-                    customFonts = bibleVm.customFonts,
-                    getReadCount = { book -> bibleVm.readChapterCount(book) },
-                    getTotalCount = { book -> bibleVm.totalChapterCount(book) },
-                    initialViewMode = bibleVm.bibleViewMode,
-                    onViewModeChange = { bibleVm.saveBibleViewMode(it) },
-                    initialFilter = bibleVm.bibleSelectedFilter,
-                    onFilterChange = { bibleVm.saveBibleFilter(it) },
-                    initialCarouselIndex = bibleVm.bibleCarouselIndex,
-                    onCarouselIndexChange = { bibleVm.saveBibleCarouselIndex(it) }
-                )
-            }
-            // Scripture viewer — shown after selecting a book
-            composable(Screen.Scripture.route) {
-                BibleScreen(
-                    vm = bibleVm,
-                    onOpenBookSelection = { onBookSelected ->
-                        bookSelectionCallback = onBookSelected
-                        navController.navigate(Screen.Reader.route) {
-                            launchSingleTop = true
-                        }
-                    },
-                    onOpenAppearance = { navController.navigate(Screen.Appearance.route) },
-                    onBack = { navController.popBackStack() }
-                )
+                    }
+                }
             }
             composable(Screen.Search.route) {
                 JournalScreen(
