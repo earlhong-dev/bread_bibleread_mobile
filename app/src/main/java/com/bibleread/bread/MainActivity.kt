@@ -474,12 +474,17 @@ fun MainApp(dbReady: State<Boolean>) {
 
         // ── Floating nav pill ──────────────────────────────────────────────
         if (showNavBar) {
+            val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val isGestureNav = navBarHeight < 24.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = if (isGestureNav) 16.dp else 8.dp
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 val navBarColor = MaterialTheme.colorScheme.surfaceVariant
@@ -489,7 +494,6 @@ fun MainApp(dbReady: State<Boolean>) {
                     shadowElevation = 0.dp,
                     shape = RoundedCornerShape(50.dp),
                     color = navBarColor,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)

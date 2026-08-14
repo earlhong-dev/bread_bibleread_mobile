@@ -590,10 +590,6 @@ fun BibleScreen(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 4.dp,
                     shadowElevation = 0.dp,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-                    ),
                     modifier = Modifier.height(52.dp)
                 ) {
                     Row(
@@ -646,15 +642,35 @@ fun BibleScreen(
                             )
                         }
 
-                        // Bookmark
+                        // Bookmark / Highlight selected verses
+                        val allHighlighted = selectedVerses.isNotEmpty() &&
+                            selectedVerses.all { vm.highlights[it] != null }
                         IconButton(
-                            onClick = { /* TODO: bookmark current chapter */ },
+                            onClick = {
+                                if (allHighlighted) {
+                                    // Remove highlights from all selected verses
+                                    selectedVerses.toSet().forEach { vm.removeHighlight(it) }
+                                    selectedVerses.clear()
+                                } else {
+                                    val color = vm.selectedHighlightColor.value
+                                    if (color != null && selectedVerses.isNotEmpty()) {
+                                        vm.applyHighlight(selectedVerses.toSet(), color)
+                                        selectedVerses.clear()
+                                    }
+                                }
+                            },
                             modifier = Modifier.size(44.dp)
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.ic_bookmark),
+                                painter = painterResource(
+                                    if (allHighlighted) R.drawable.ic_bookmark_filled
+                                    else R.drawable.ic_bookmark
+                                ),
                                 contentDescription = "Bookmark",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                tint = if (allHighlighted)
+                                    Color.White
+                                else
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -741,7 +757,7 @@ fun BibleScreen(
         AnimatedVisibility(
             visible = showColorPickerRow,
             enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(180)),
+            exit = fadeOut(tween(260)),
             modifier = Modifier.fillMaxSize()
         ) {
             Box(
@@ -754,20 +770,27 @@ fun BibleScreen(
                     ) { showColorPickerRow = false }
             )
         }
-        // Sheet with drag-to-close
-        if (showColorPickerRow) {
-            var dragOffsetY by remember { mutableFloatStateOf(0f) }
-            var isDragging by remember { mutableStateOf(false) }
-            val animatedOffset by animateFloatAsState(
-                targetValue = if (isDragging) dragOffsetY else 0f,
-                animationSpec = if (isDragging) snap() else tween(durationMillis = 220),
-                label = "sheetDrag"
-            )
-            val dismissThreshold = with(LocalDensity.current) { 120.dp.toPx() }
+        // Sheet with slide-up/down + drag-to-close
+        var dragOffsetY by remember { mutableFloatStateOf(0f) }
+        var isDragging by remember { mutableStateOf(false) }
+        var colorPendingDelete by remember { mutableStateOf<Color?>(null) }
+        val animatedOffset by animateFloatAsState(
+            targetValue = if (isDragging) dragOffsetY else 0f,
+            animationSpec = if (isDragging) snap() else tween(durationMillis = 220),
+            label = "sheetDrag"
+        )
+        val dismissThreshold = with(LocalDensity.current) { 120.dp.toPx() }
 
+        AnimatedVisibility(
+            visible = showColorPickerRow,
+            enter = slideInVertically(animationSpec = tween(300)) { it },
+            exit = slideOutVertically(animationSpec = tween(260)) { it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+        ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .graphicsLayer { translationY = if (isDragging) dragOffsetY else animatedOffset }
             ) {
@@ -814,7 +837,7 @@ fun BibleScreen(
                                 modifier = Modifier
                                     .size(width = 36.dp, height = 4.dp)
                                     .background(
-                                        Color.White.copy(alpha = 0.2f),
+                                        Color.White,
                                         RoundedCornerShape(50.dp)
                                     )
                             )
@@ -829,31 +852,56 @@ fun BibleScreen(
                             modifier = Modifier.padding(bottom = 20.dp)
                         )
 
-                        // Color swatches
-                        LazyRow(
-                            state = colorListState,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(horizontal = 24.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        // Color swatches with edge fades
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
                         ) {
+                            val canScrollLeft by remember {
+                                derivedStateOf {
+                                    colorListState.firstVisibleItemIndex > 0 ||
+                                        colorListState.firstVisibleItemScrollOffset > 0
+                                }
+                            }
+                            val canScrollRight by remember {
+                                derivedStateOf {
+                                    val info = colorListState.layoutInfo
+                                    val last = info.visibleItemsInfo.lastOrNull()
+                                    last != null && (last.index < info.totalItemsCount - 1 ||
+                                        last.offset + last.size > info.viewportEndOffset)
+                                }
+                            }
+
+                            LazyRow(
+                                state = colorListState,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                             items(presetColors) { c ->
+                                val isSelected = vm.selectedHighlightColor.value == c
                                 Box(
+                                    contentAlignment = Alignment.Center,
                                     modifier = Modifier
                                         .size(32.dp)
                                         .background(c, CircleShape)
-                                        .border(
-                                            width = if (vm.selectedHighlightColor.value == c) 2.dp else 1.dp,
-                                            color = if (vm.selectedHighlightColor.value == c)
-                                                Color.White
-                                            else
-                                                Color.White.copy(alpha = 0.06f),
-                                            shape = CircleShape
-                                        )
                                         .clickable {
-                                            vm.selectHighlightColor(c)
-                                            showColorPickerRow = false
+                                            if (vm.selectedHighlightColor.value == c) {
+                                                vm.selectHighlightColor(null)
+                                            } else {
+                                                vm.selectHighlightColor(c)
+                                            }
                                         }
-                                )
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_check_lucide),
+                                            contentDescription = "Selected",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                             }
                             // Vertical separator — always shown
                             item {
@@ -888,31 +936,97 @@ fun BibleScreen(
                                 }
                             }
                             items(vm.customColors) { c ->
+                                val isSelected = vm.selectedHighlightColor.value == c
+                                val isPendingDelete = colorPendingDelete == c
                                 Box(
+                                    contentAlignment = Alignment.Center,
                                     modifier = Modifier
                                         .size(32.dp)
                                         .background(c, CircleShape)
-                                        .border(
-                                            width = if (vm.selectedHighlightColor.value == c) 2.dp else 1.dp,
-                                            color = if (vm.selectedHighlightColor.value == c)
-                                                Color.White
-                                            else
-                                                Color.White.copy(alpha = 0.06f),
-                                            shape = CircleShape
-                                        )
-                                        .clickable {
-                                            vm.selectHighlightColor(c)
-                                            showColorPickerRow = false
+                                        .pointerInput(colorPendingDelete) {
+                                            detectTapGestures(
+                                                onLongPress = {
+                                                    colorPendingDelete = if (isPendingDelete) null else c
+                                                },
+                                                onTap = {
+                                                    if (isPendingDelete) {
+                                                        vm.removeCustomColor(c)
+                                                        colorPendingDelete = null
+                                                    } else {
+                                                        colorPendingDelete = null
+                                                        if (vm.selectedHighlightColor.value == c) {
+                                                            vm.selectHighlightColor(null)
+                                                        } else {
+                                                            vm.selectHighlightColor(c)
+                                                        }
+                                                    }
+                                                }
+                                            )
                                         }
+                                ) {
+                                    when {
+                                        isPendingDelete -> Icon(
+                                            painter = painterResource(R.drawable.ic_trash_lucide),
+                                            contentDescription = "Delete",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        isSelected -> Icon(
+                                            painter = painterResource(R.drawable.ic_check_lucide),
+                                            contentDescription = "Selected",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        } // end LazyRow
+
+                            // Left fade — only when not at start
+                            if (canScrollLeft) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .width(20.dp)
+                                        .height(32.dp)
+                                        .background(
+                                            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                                colors = listOf(Color(0xFF1A1A1A), Color.Transparent)
+                                            )
+                                        )
                                 )
                             }
-                        }
+                            // Right fade — only when not at end
+                            if (canScrollRight) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(20.dp)
+                                        .height(32.dp)
+                                        .background(
+                                            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                                colors = listOf(Color.Transparent, Color(0xFF1A1A1A))
+                                            )
+                                        )
+                                )
+                            }
+                        } // end Box (swatches + fades)
 
                         Spacer(modifier = Modifier.height(0.dp))
 
                         // Inline custom color picker
+                        val selectedHex = remember(vm.selectedHighlightColor.value) {
+                            vm.selectedHighlightColor.value?.let { c ->
+                                String.format(
+                                    "%02X%02X%02X",
+                                    (c.red * 255).toInt(),
+                                    (c.green * 255).toInt(),
+                                    (c.blue * 255).toInt()
+                                )
+                            } ?: vm.lastCustomHex
+                        }
                         CustomColorPickerPanel(
-                            initialHex = vm.lastCustomHex,
+                            initialHex = selectedHex,
                             onHexChanged = { vm.saveLastCustomHex(it) },
                             onColorSelected = { color ->
                                 vm.selectHighlightColor(color)
@@ -921,7 +1035,6 @@ fun BibleScreen(
                             onColorAdded = { color ->
                                 vm.addCustomColor(color)
                                 vm.selectHighlightColor(color)
-                                showColorPickerRow = false
                                 coroutineScope.launch {
                                     kotlinx.coroutines.delay(50)
                                     colorListState.animateScrollToItem(presetColors.size + vm.customColors.size - 1)
@@ -1555,7 +1668,7 @@ fun BookSelectionOverlay(
                             }
 
                             // Reading Progress
-                            Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
                             val readCount   = getReadCount(centerBook.name)
                             val totalCount  = getTotalCount(centerBook.name).coerceAtLeast(1)
                             val progress    = readCount / totalCount.toFloat()
@@ -2452,6 +2565,20 @@ fun CustomColorPickerPanel(
     var hexInput by remember { mutableStateOf(initialHex) }
     var hexError by remember { mutableStateOf(false) }
 
+    // Sync all state whenever initialHex changes (e.g. swatch selected externally)
+    LaunchedEffect(initialHex) {
+        try {
+            val parsed = "#$initialHex".toColorInt()
+            val hsvOut = FloatArray(3)
+            android.graphics.Color.colorToHSV(parsed, hsvOut)
+            if (hsvOut[1] > 0f) hue = hsvOut[0]
+            saturation = hsvOut[1]
+            value = hsvOut[2]
+            hexInput = initialHex
+            hexError = false
+        } catch (_: Exception) { }
+    }
+
     fun hsvToColor(h: Float, s: Float, v: Float): Color {
         val hsv = floatArrayOf(h, s, v)
         return Color(android.graphics.Color.HSVToColor(hsv))
@@ -2475,28 +2602,16 @@ fun CustomColorPickerPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
 
-        // ── Top row: color circle | hex input (with # inside) | ✕ | ✓ ──────
+        // ── Top row: hex input | color circle | add (was ✕) | ✓ ──────
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Color preview circle beside hex input
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(currentColor, CircleShape)
-                    .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape)
-                    .clickable { onColorAdded(currentColor) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("+", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
-
-            // Hex input with # prefix inside the box
+            // Hex input — fixed width for exactly 6 hex chars + # prefix
             androidx.compose.foundation.text.BasicTextField(
                 value = hexInput,
                 onValueChange = { raw ->
@@ -2524,7 +2639,7 @@ fun CustomColorPickerPanel(
                     fontFamily = FontFamily.Monospace
                 ),
                 modifier = Modifier
-                    .weight(1f)
+                    .width(90.dp)
                     .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
                     .padding(horizontal = 10.dp, vertical = 9.dp),
                 decorationBox = { inner ->
@@ -2539,17 +2654,27 @@ fun CustomColorPickerPanel(
                 }
             )
 
-            // ✕ — cancel
+            // Color preview circle — no button, just preview
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(currentColor, CircleShape)
+                    .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // + Add to custom colors (replaces ✕)
             Surface(
-                onClick = onDismiss,
+                onClick = { onColorAdded(currentColor) },
                 shape = CircleShape,
                 color = Color.White.copy(alpha = 0.08f),
                 modifier = Modifier.size(38.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_x_lucide),
-                        contentDescription = "Cancel",
+                        painter = painterResource(R.drawable.ic_plus_lucide),
+                        contentDescription = "Add color",
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
@@ -2576,103 +2701,96 @@ fun CustomColorPickerPanel(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ── Picker row: hue slider (left) | 2D picker (center) ──────────────
+        // ── 2D saturation/value picker ────────────────────────────────────────
         val pickerHeight = 110.dp
-        val pickerHeightPx = with(LocalDensity.current) { pickerHeight.toPx() }
-        val sliderWidth = 36.dp // matches color preview circle width
 
-        Row(
-            modifier = Modifier.fillMaxWidth().height(pickerHeight),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left: vertical hue slider aligned with preview circle
-            Box(
-                modifier = Modifier
-                    .width(sliderWidth)
-                    .fillMaxHeight()
-                    .pointerInput(Unit) {
-                        detectTapGestures { offset ->
-                            hue = (offset.y / size.height * 360f).coerceIn(0f, 360f)
-                            syncHex()
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectDragGestures { change: androidx.compose.ui.input.pointer.PointerInputChange, _: androidx.compose.ui.geometry.Offset ->
-                            hue = (change.position.y / size.height * 360f).coerceIn(0f, 360f)
-                            syncHex()
-                        }
-                    },
-                contentAlignment = Alignment.TopCenter
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(16.dp)
-                        .fillMaxHeight()
-                        .background(
-                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                (0..12).map { hsvToColor(it * 30f, 1f, 1f) }
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        )
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(pickerHeight)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        listOf(Color.White, hsvToColor(hue, 1f, 1f))
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 )
-                val thumbY = with(LocalDensity.current) {
-                    (hue / 360f * pickerHeightPx).toDp()
-                }
-                Box(
-                    modifier = Modifier
-                        .offset(y = thumbY - 2.dp)
-                        .size(width = 24.dp, height = 4.dp)
-                        .background(Color.White, RoundedCornerShape(2.dp))
-                        .border(0.5.dp, Color.Black.copy(alpha = 0.2f), RoundedCornerShape(2.dp))
-                )
-            }
-
-            // Center: 2D saturation/lightness picker
-            androidx.compose.foundation.layout.BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            listOf(Color.White, hsvToColor(hue, 1f, 1f))
+                .then(
+                    Modifier.background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black)
                         ),
                         shape = RoundedCornerShape(12.dp)
                     )
-                    .then(
-                        Modifier.background(
-                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black)
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                    )
-                    .pointerInput(Unit) {
-                        detectTapGestures { offset ->
-                            saturation = (offset.x / size.width).coerceIn(0f, 1f)
-                            value  = (1f - offset.y / size.height).coerceIn(0f, 1f)
-                            syncHex()
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectDragGestures { change: androidx.compose.ui.input.pointer.PointerInputChange, _: androidx.compose.ui.geometry.Offset ->
-                            saturation = (change.position.x / size.width).coerceIn(0f, 1f)
-                            value  = (1f - change.position.y / size.height).coerceIn(0f, 1f)
-                            syncHex()
-                        }
-                    }
-            ) {
-                val pinX = maxWidth * saturation
-                val pinY = maxHeight * (1f - value)
-
-                Box(
-                    modifier = Modifier
-                        .offset(x = pinX - 8.dp, y = pinY - 8.dp)
-                        .size(16.dp)
-                        .border(2.dp, Color.White, CircleShape)
-                        .background(currentColor, CircleShape)
                 )
-            }
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        saturation = (offset.x / size.width).coerceIn(0f, 1f)
+                        value = (1f - offset.y / size.height).coerceIn(0f, 1f)
+                        syncHex()
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures { change: androidx.compose.ui.input.pointer.PointerInputChange, _: androidx.compose.ui.geometry.Offset ->
+                        saturation = (change.position.x / size.width).coerceIn(0f, 1f)
+                        value = (1f - change.position.y / size.height).coerceIn(0f, 1f)
+                        syncHex()
+                    }
+                }
+        ) {
+            val pinX = maxWidth * saturation
+            val pinY = maxHeight * (1f - value)
+            Box(
+                modifier = Modifier
+                    .offset(x = pinX - 8.dp, y = pinY - 8.dp)
+                    .size(16.dp)
+                    .border(2.dp, Color.White, CircleShape)
+                    .background(currentColor, CircleShape)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // ── Horizontal hue slider below the 2D box ────────────────────────────
+        val sliderHeight = 16.dp
+
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(sliderHeight)
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        hue = (offset.x / size.width * 360f).coerceIn(0f, 360f)
+                        syncHex()
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures { change: androidx.compose.ui.input.pointer.PointerInputChange, _: androidx.compose.ui.geometry.Offset ->
+                        hue = (change.position.x / size.width * 360f).coerceIn(0f, 360f)
+                        syncHex()
+                    }
+                }
+        ) {
+            // Rainbow track
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            (0..12).map { hsvToColor(it * 30f, 1f, 1f) }
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+            )
+            // Thumb — circle matching the color pin style, centered on track
+            val thumbX = maxWidth * (hue / 360f)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = thumbX - 8.dp)
+                    .size(16.dp)
+                    .border(2.dp, Color.White, CircleShape)
+                    .background(hsvToColor(hue, 1f, 1f), CircleShape)
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
