@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -76,7 +77,6 @@ import androidx.compose.ui.text.font.Font
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.toColorInt
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -134,20 +134,10 @@ fun BibleScreen(
     val fontSize = vm.fontSize
     val fontStyle = vm.fontStyle
     var showTranslationPicker by rememberSaveable { mutableStateOf(false) }
-    var showSelectedVersesWindow by rememberSaveable { mutableStateOf(false) }
-    val selectedVerses = rememberSaveable(
-        saver = listSaver(
-            save = { it.toList() },
-            restore = { 
-                val set = mutableStateSetOf<String>()
-                set.addAll(it)
-                set
-            }
-        )
-    ) { mutableStateSetOf<String>() }
+
+    val selectedVerses = remember { mutableStateSetOf<String>() }
 
     var showColorPickerRow by rememberSaveable { mutableStateOf(false) }
-    var showCustomColorPicker by rememberSaveable { mutableStateOf(false) }
 
     val highlights = vm.highlights
 
@@ -182,14 +172,6 @@ fun BibleScreen(
         selectedBook = book
         targetChapter = chapter
         vm.loadChapter(book, chapter, resetScroll = true)
-    }
-
-    fun clearSelectedVerses(verseKeys: Set<String>) {
-        selectedVerses.removeAll(verseKeys)
-        if (selectedVerses.isEmpty()) {
-            showColorPickerRow = false
-            showSelectedVersesWindow = false
-        }
     }
 
     LaunchedEffect(uiState) {
@@ -232,8 +214,6 @@ fun BibleScreen(
         label = "contentAlpha"
     )
     // ─────────────────────────────────────────────────────────────────────────
-
-    val hasSelection = selectedVerses.isNotEmpty()
 
     val swipeDensity = LocalDensity.current
     val swipeThresholdPx = with(swipeDensity) { 60.dp.toPx() }
@@ -297,7 +277,7 @@ fun BibleScreen(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
                         ) {
-                            if (!hasSelection) onOpenBookSelection { book, chapter ->
+                            onOpenBookSelection { book, chapter ->
                                 requestChapter(book, chapter)
                             }
                         }
@@ -363,41 +343,31 @@ fun BibleScreen(
                 is BibleUiState.Success -> {
                     val versesByChapter = state.verses.groupBy { it.chapter }
 
-                    // Reset color picker row when selection is cleared
-                            LaunchedEffect(selectedVerses.size) {
-                        if (selectedVerses.isEmpty()) {
-                            showColorPickerRow = false
-                            showSelectedVersesWindow = false
-                        }
-                    }
-
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 36.dp)
                             .graphicsLayer { alpha = contentAlpha }
-                            .pointerInput(hasSelection) {
-                                if (!hasSelection) {
-                                    detectHorizontalDragGestures(
-                                        onDragStart = { swipeAccumulator = 0f },
-                                        onDragEnd = {
-                                            if (swipeAccumulator < -swipeThresholdPx) {
-                                                val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
-                                                if (targetChapter < maxChapter)
-                                                    requestChapter(selectedBook, targetChapter + 1)
-                                            } else if (swipeAccumulator > swipeThresholdPx) {
-                                                if (targetChapter > 1)
-                                                    requestChapter(selectedBook, targetChapter - 1)
-                                            }
-                                            swipeAccumulator = 0f
-                                        },
-                                        onDragCancel = { swipeAccumulator = 0f },
-                                        onHorizontalDrag = { _, dragAmount ->
-                                            swipeAccumulator += dragAmount
+                            .pointerInput(Unit) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { swipeAccumulator = 0f },
+                                    onDragEnd = {
+                                        if (swipeAccumulator < -swipeThresholdPx) {
+                                            val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
+                                            if (targetChapter < maxChapter)
+                                                requestChapter(selectedBook, targetChapter + 1)
+                                        } else if (swipeAccumulator > swipeThresholdPx) {
+                                            if (targetChapter > 1)
+                                                requestChapter(selectedBook, targetChapter - 1)
                                         }
-                                    )
-                                }
+                                        swipeAccumulator = 0f
+                                    },
+                                    onDragCancel = { swipeAccumulator = 0f },
+                                    onHorizontalDrag = { _, dragAmount ->
+                                        swipeAccumulator += dragAmount
+                                    }
+                                )
                             },
                         contentPadding = PaddingValues(top = 0.dp, bottom = 80.dp)
                     ) {
@@ -467,12 +437,8 @@ fun BibleScreen(
                                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                             indication = null
                                         ) {
-                                            if (isSelected) {
-                                                clearSelectedVerses(setOf(verseKey))
-                                            } else {
-                                                selectedVerses.add(verseKey)
-                                                showColorPickerRow = true
-                                            }
+                                            if (isSelected) selectedVerses.remove(verseKey)
+                                            else selectedVerses.add(verseKey)
                                         }
                                         .padding(
                                             top = if (hasHeading) 16.dp else 0.dp,
@@ -585,6 +551,164 @@ fun BibleScreen(
     }
 
 
+        // ── Gradient fade behind scripture toolbar ────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.75f),
+                            MaterialTheme.colorScheme.background
+                        ),
+                        startY = 0f,
+                        endY = Float.POSITIVE_INFINITY
+                    )
+                )
+        )
+
+        // ── Scripture toolbar (bottom-center) ─────────────────────────────────
+        AnimatedVisibility(
+            visible = contentVisible,
+            enter = fadeIn(tween(220)) + slideInVertically { it / 2 },
+            exit = fadeOut(tween(160)) + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        ) {
+            val context = LocalContext.current
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Pill — appearance, share, draw, bookmark, highlight color circle
+                Surface(
+                    shape = RoundedCornerShape(50.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 0.dp,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+                    ),
+                    modifier = Modifier.height(52.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 6.dp)
+                    ) {
+                        // Share
+                        IconButton(
+                            onClick = {
+                                val shareText = "$selectedBook $targetChapter"
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(Intent.createChooser(intent, null))
+                            },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_share2_lucide),
+                                contentDescription = "Share",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Appearance settings
+                        IconButton(
+                            onClick = { onOpenAppearance() },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_settings2),
+                                contentDescription = "Appearance",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Draw / annotate
+                        IconButton(
+                            onClick = { /* TODO: draw mode */ },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_pencil),
+                                contentDescription = "Draw",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Bookmark
+                        IconButton(
+                            onClick = { /* TODO: bookmark current chapter */ },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_bookmark),
+                                contentDescription = "Bookmark",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Highlight color circle — shows active color, opens color picker
+                        val activeHighlightColor = vm.selectedHighlightColor.value
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    showColorPickerRow = !showColorPickerRow
+                                }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .background(
+                                        color = activeHighlightColor
+                                            ?: MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                        shape = CircleShape
+                                    )
+                                    .border(
+                                        1.5.dp,
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                        CircleShape
+                                    )
+                            )
+                        }
+                    }
+                }
+
+                // Chapter number circle — sits right of the pill
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .shadow(6.dp, CircleShape)
+                        .background(Color.White, CircleShape)
+                ) {
+                    Text(
+                        text = targetChapter.toString(),
+                        color = Color(0xFF1A1A1A),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = currentFontFamily
+                    )
+                }
+            }
+        }
+
         // ── Translation picker overlay ────────────────────────────────────────
         if (showTranslationPicker) {
             Box(
@@ -612,185 +736,204 @@ fun BibleScreen(
             )
         }
 
-        // ── Compact color picker row (appears when verses selected) ───────────
+        // ── Color picker bottom sheet ─────────────────────────────────────────
+        // Scrim
         AnimatedVisibility(
             visible = showColorPickerRow,
-            enter = slideInVertically { it / 2 } + fadeIn(tween(180)),
-            exit = slideOutVertically { it / 2 } + fadeOut(tween(140)),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.fillMaxSize()
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(20.dp),
+            Box(
                 modifier = Modifier
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { showColorPickerRow = false }
+            )
+        }
+        // Sheet with drag-to-close
+        if (showColorPickerRow) {
+            var dragOffsetY by remember { mutableFloatStateOf(0f) }
+            var isDragging by remember { mutableStateOf(false) }
+            val animatedOffset by animateFloatAsState(
+                targetValue = if (isDragging) dragOffsetY else 0f,
+                animationSpec = if (isDragging) snap() else tween(durationMillis = 220),
+                label = "sheetDrag"
+            )
+            val dismissThreshold = with(LocalDensity.current) { 120.dp.toPx() }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .graphicsLayer { translationY = if (isDragging) dragOffsetY else animatedOffset }
             ) {
-                Row(
+                Surface(
+                    color = Color(0xFF1A1A1A),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { isDragging = true },
+                                onDragEnd = {
+                                    isDragging = false
+                                    if (dragOffsetY > dismissThreshold) {
+                                        showColorPickerRow = false
+                                    }
+                                    dragOffsetY = 0f
+                                },
+                                onDragCancel = {
+                                    isDragging = false
+                                    dragOffsetY = 0f
+                                },
+                                onDrag = { _, dragAmount ->
+                                    dragOffsetY = (dragOffsetY + dragAmount.y).coerceAtLeast(0f)
+                                }
+                            )
+                        }
                 ) {
-                    LazyRow(
-                        state = colorListState,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        items(presetColors) { c ->
+                        // Drag handle
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 20.dp)
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .background(c, CircleShape)
-                                    .border(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f), CircleShape)
-                                    .clickable {
-                                        val verseKeys = selectedVerses.toSet()
-                                        vm.applyHighlight(verseKeys, c)
-                                        clearSelectedVerses(verseKeys)
-                                    }
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .background(
+                                        Color.White.copy(alpha = 0.2f),
+                                        RoundedCornerShape(50.dp)
+                                    )
                             )
                         }
-                        items(vm.customColors) { c ->
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(c, CircleShape)
-                                    .border(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f), CircleShape)
-                                    .clickable {
-                                        val verseKeys = selectedVerses.toSet()
-                                        vm.applyHighlight(verseKeys, c)
-                                        clearSelectedVerses(verseKeys)
+
+                        Text(
+                            text = "Highlight Color",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = Color.White,
+                            fontFamily = currentFontFamily,
+                            modifier = Modifier.padding(bottom = 20.dp)
+                        )
+
+                        // Color swatches
+                        LazyRow(
+                            state = colorListState,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(horizontal = 24.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(presetColors) { c ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(c, CircleShape)
+                                        .border(
+                                            width = if (vm.selectedHighlightColor.value == c) 2.dp else 1.dp,
+                                            color = if (vm.selectedHighlightColor.value == c)
+                                                Color.White
+                                            else
+                                                Color.White.copy(alpha = 0.06f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable {
+                                            vm.selectHighlightColor(c)
+                                            showColorPickerRow = false
+                                        }
+                                )
+                            }
+                            // Vertical separator — always shown
+                            item {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .width(12.dp)
+                                        .height(32.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(1.dp)
+                                            .height(20.dp)
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                    )
+                                }
+                            }
+                            if (vm.customColors.isEmpty()) {
+                                item {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text(
+                                            text = "Add Custom Color?",
+                                            color = Color.White.copy(alpha = 0.35f),
+                                            fontSize = 12.sp,
+                                            fontFamily = currentFontFamily,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
-                            )
+                                }
+                            }
+                            items(vm.customColors) { c ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(c, CircleShape)
+                                        .border(
+                                            width = if (vm.selectedHighlightColor.value == c) 2.dp else 1.dp,
+                                            color = if (vm.selectedHighlightColor.value == c)
+                                                Color.White
+                                            else
+                                                Color.White.copy(alpha = 0.06f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable {
+                                            vm.selectHighlightColor(c)
+                                            showColorPickerRow = false
+                                        }
+                                )
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.height(0.dp))
 
-                    TextButton(onClick = {
-                        val verseKeys = selectedVerses.toSet()
-                        verseKeys.forEach { vm.removeHighlight(it) }
-                        clearSelectedVerses(verseKeys)
-                    }) {
-                        Text("Remove", color = MaterialTheme.colorScheme.onBackground)
-                    }
-
-                    TextButton(onClick = { showCustomColorPicker = true }) {
-                        Text("Custom", color = MaterialTheme.colorScheme.onBackground)
+                        // Inline custom color picker
+                        CustomColorPickerPanel(
+                            initialHex = vm.lastCustomHex,
+                            onHexChanged = { vm.saveLastCustomHex(it) },
+                            onColorSelected = { color ->
+                                vm.selectHighlightColor(color)
+                                showColorPickerRow = false
+                            },
+                            onColorAdded = { color ->
+                                vm.addCustomColor(color)
+                                vm.selectHighlightColor(color)
+                                showColorPickerRow = false
+                                coroutineScope.launch {
+                                    kotlinx.coroutines.delay(50)
+                                    colorListState.animateScrollToItem(presetColors.size + vm.customColors.size - 1)
+                                }
+                            },
+                            onDismiss = { showColorPickerRow = false }
+                        )
                     }
                 }
             }
         }
 
-        // ── Custom color picker popup ─────────────────────────────────────────
-        AnimatedVisibility(
-            visible = showCustomColorPicker,
-            enter = slideInVertically { it } + fadeIn(tween(200)),
-            exit = slideOutVertically { it } + fadeOut(tween(150)),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            CustomColorPickerPanel(
-                initialHex = vm.lastCustomHex,
-                onHexChanged = { vm.saveLastCustomHex(it) },
-                onColorSelected = { color ->
-                    val verseKeys = selectedVerses.toSet()
-                    vm.applyHighlight(verseKeys, color)
-                    vm.selectHighlightColor(color)
-                    clearSelectedVerses(verseKeys)
-                    showCustomColorPicker = false
-                },
-                onColorAdded = { color ->
-                    val verseKeys = selectedVerses.toSet()
-                    vm.addCustomColor(color)
-                    vm.selectHighlightColor(color)
-                    vm.applyHighlight(verseKeys, color)
-                    clearSelectedVerses(verseKeys)
-                    showCustomColorPicker = false
-                    coroutineScope.launch {
-                        // wait a bit for the row to recompose
-                        kotlinx.coroutines.delay(50)
-                        colorListState.animateScrollToItem(presetColors.size + vm.customColors.size - 1)
-                    }
-                },
-                onDismiss = { showCustomColorPicker = false }
-            )
-        }
-
-        // ── Selected verses overlay ───────────────────────────────────────────
-        AnimatedVisibility(
-            visible = showSelectedVersesWindow,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            val selectedVerseEntities = remember(selectedVerses.size, uiState) {
-                if (uiState is BibleUiState.Success) {
-                    val currentVerses = (uiState as BibleUiState.Success).verses
-                    currentVerses.filter { "${it.book}-${it.chapter}-${it.verse}" in selectedVerses }
-                        .sortedBy { it.verse }
-                } else {
-                    emptyList()
-                }
-            }
-
-            // Build full verse range label using full book name
-            val fullVerseRangeLabel = remember(selectedVerses.size) {
-                val verseNums = selectedVerses
-                    .filter { it.startsWith("$selectedBook-$targetChapter-") }
-                    .mapNotNull { it.substringAfterLast("-").toIntOrNull() }
-                    .sorted()
-                if (verseNums.isEmpty()) {
-                    "$selectedBook $targetChapter"
-                } else {
-                    val isAllConsecutive = verseNums.last() - verseNums.first() == verseNums.size - 1
-                    val suffix = when {
-                        verseNums.size == 1 -> ":${verseNums.first()}"
-                        isAllConsecutive -> ":${verseNums.first()}-${verseNums.last()}"
-                        verseNums.size == 2 -> ":${verseNums[0]}, ${verseNums[1]}"
-                        else -> ":${verseNums.first()}..${verseNums.last()}"
-                    }
-                    "$selectedBook $targetChapter$suffix"
-                }
-            }
-
-            val context = LocalContext.current
-            SelectedVersesOverlay(
-                headerText = fullVerseRangeLabel,
-                selectedVerses = selectedVerseEntities,
-                fontStyle = fontStyle,
-                fontSize = fontSize,
-                customFonts = vm.customFonts,
-                onClose = { showSelectedVersesWindow = false },
-                onShare = {
-                    val shareText = buildString {
-                        append(fullVerseRangeLabel)
-                        append("\n\n")
-                        selectedVerseEntities.forEach { v ->
-                            val lbl = v.display ?: v.verse.toString()
-                            append("$lbl  ${v.text.trim()}\n")
-                        }
-                    }
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, shareText.trim())
-                    }
-                    context.startActivity(Intent.createChooser(intent, null))
-                },
-                onCopy = {
-                    val copyText = buildString {
-                        append(fullVerseRangeLabel)
-                        append("\n\n")
-                        selectedVerseEntities.forEach { v ->
-                            val lbl = v.display ?: v.verse.toString()
-                            append("$lbl  ${v.text.trim()}\n")
-                        }
-                    }
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                        as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(
-                        android.content.ClipData.newPlainText("verse", copyText.trim())
-                    )
-                }
-            )
-        }
     }
 
 }
@@ -849,6 +992,7 @@ fun BookSelectionOverlay(
     initialCarouselIndex: Int = 0,
     onCarouselIndexChange: (Int) -> Unit = {}
 ) {
+    val focusManager = LocalFocusManager.current
     var searchQuery by remember { mutableStateOf("") }
     var expandedBook by remember { mutableStateOf<String?>(null) }
     var selectedFilter by remember { mutableStateOf(initialFilter) }
@@ -1029,7 +1173,8 @@ fun BookSelectionOverlay(
         } // end CompositionLocalProvider
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Hoisted here so filter chips can scroll carousel to top
+        // Hoisted here so filte
+        // r chips can scroll carousel to top
         val carouselListState = remember(selectedFilter) {
             androidx.compose.foundation.lazy.LazyListState(0, 0)
         }
@@ -1389,7 +1534,7 @@ fun BookSelectionOverlay(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Surface(
-                                    onClick = { onBookSelected(centerBook.name, 1) },
+                                    onClick = { focusManager.clearFocus(); onBookSelected(centerBook.name, 1) },
                                     shape = RoundedCornerShape(50.dp),
                                     color = Color.White,
                                     modifier = Modifier.height(44.dp)
@@ -1517,7 +1662,7 @@ fun BookSelectionOverlay(
                         )
 
                         Surface(
-                            onClick = { onBookSelected(item.name, 1) },
+                            onClick = { focusManager.clearFocus(); onBookSelected(item.name, 1) },
                             shape = RoundedCornerShape(16.dp),
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f),
                             modifier = Modifier
@@ -2330,10 +2475,8 @@ fun CustomColorPickerPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF1A1A1A), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        Spacer(modifier = Modifier.height(12.dp))
 
         // ── Top row: color circle | hex input (with # inside) | ✕ | ✓ ──────
         Row(

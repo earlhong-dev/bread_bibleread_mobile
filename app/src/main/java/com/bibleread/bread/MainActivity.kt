@@ -283,7 +283,8 @@ fun MainApp(dbReady: State<Boolean>) {
                         Modifier.statusBarsPadding()
                     else
                         Modifier
-                ),
+                )
+                .navigationBarsPadding(),
             enterTransition = { EnterTransition.None },
             exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },
