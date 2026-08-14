@@ -54,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -590,7 +592,32 @@ fun BibleScreen(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 4.dp,
                     shadowElevation = 0.dp,
-                    modifier = Modifier.height(52.dp)
+                    modifier = Modifier
+                        .height(52.dp)
+                        .drawBehind {
+                            drawIntoCanvas { canvas ->
+                                val paint = Paint().apply {
+                                    asFrameworkPaint().apply {
+                                        isAntiAlias = true
+                                        color = android.graphics.Color.TRANSPARENT
+                                        setShadowLayer(
+                                            8f, 0f, 2f,
+                                            android.graphics.Color.argb(120, 0, 0, 0)
+                                        )
+                                    }
+                                }
+                                val cornerRadius = size.height / 2f
+                                canvas.drawRoundRect(
+                                    left = 0f,
+                                    top = 0f,
+                                    right = size.width,
+                                    bottom = size.height,
+                                    radiusX = cornerRadius,
+                                    radiusY = cornerRadius,
+                                    paint = paint
+                                )
+                            }
+                        }
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
