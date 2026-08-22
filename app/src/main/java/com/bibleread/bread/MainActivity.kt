@@ -245,16 +245,18 @@ fun MainApp(dbReady: State<Boolean>) {
     val themeIndex = LocalThemeIndex.current
     val view = androidx.compose.ui.platform.LocalView.current
 
-    // Re-apply status bar icon appearance on every route change so splash can't linger
+    // Re-apply status and navigation bar icon appearance on every route / theme change so splash or theme switch is always in sync
     SideEffect {
         val window = (context as android.app.Activity).window
+        val insetsController = WindowCompat.getInsetsController(window, view)
         val isSplash = currentRoute == null || currentRoute == Screen.Splash.route
-        val lightIcons = if (isSplash) {
-            true // splash is yellow — always dark icons
+        val darkIcons = if (isSplash) {
+            true // splash is yellow — dark icons
         } else {
-            themeIndex == 0 || themeIndex == 2 // paper/light = dark icons, dark = light icons
+            themeIndex == 1 || themeIndex == 2 // light (1) & paper (2) = dark icons, dark (0) = light icons
         }
-        WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = lightIcons
+        insetsController.isAppearanceLightStatusBars = darkIcons
+        insetsController.isAppearanceLightNavigationBars = darkIcons
     }
 
     val showNavBar = currentRoute != null &&

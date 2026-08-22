@@ -68,7 +68,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putFloat("font_size", size).apply()
     }
 
-    var fontStyle by mutableStateOf(prefs.getString("font_style", "Sans-Serif") ?: "Sans-Serif")
+    var fontStyle by mutableStateOf(prefs.getString("font_style", "Serif") ?: "Serif")
         private set
 
     fun saveFontStyle(style: String) {
@@ -77,7 +77,7 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("font_style", style).apply()
     }
 
-    var selectedThemeIndex by mutableStateOf(prefs.getInt("theme_index", 1)) // Default to 1 (Dark)
+    var selectedThemeIndex by mutableStateOf(prefs.getInt("theme_index", 0)) // Default to 0 (Dark)
         private set
 
     fun saveThemeIndex(index: Int) {

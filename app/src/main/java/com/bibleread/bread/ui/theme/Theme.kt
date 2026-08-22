@@ -63,13 +63,13 @@ private val PaperColorScheme = lightColorScheme(
 )
 
 
-val LocalThemeIndex = staticCompositionLocalOf { 1 } // Default to 1 (Dark)
+val LocalThemeIndex = staticCompositionLocalOf { 0 } // Default to 0 (Dark)
 
 @Composable
-fun BreadTheme(themeIndex: Int = 1, content: @Composable () -> Unit) {
+fun BreadTheme(themeIndex: Int = 0, content: @Composable () -> Unit) {
     val colorScheme = when (themeIndex) {
-        0 -> PaperColorScheme
-        2 -> LightColorScheme
+        1 -> LightColorScheme
+        2 -> PaperColorScheme
         else -> DarkColorScheme
     }
 
@@ -80,9 +80,11 @@ fun BreadTheme(themeIndex: Int = 1, content: @Composable () -> Unit) {
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
 
-            // Dark icons for Paper (0) and Light (2), light icons for Dark (1)
-            val darkStatusIcons = themeIndex == 0 || themeIndex == 2
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkStatusIcons
+            // Dark icons for Light (1) and Paper (2), light icons for Dark (0)
+            val darkIcons = themeIndex == 1 || themeIndex == 2
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = darkIcons
+            insetsController.isAppearanceLightNavigationBars = darkIcons
         }
     }
 

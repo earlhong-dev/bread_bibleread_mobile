@@ -2286,7 +2286,7 @@ fun AppearanceSettingsOverlay(
             }
             Spacer(modifier = Modifier.height(12.dp))
             
-            val builtInFontOptions = listOf("Sans-Serif", "Serif", "Monospace", "Cursive")
+            val builtInFontOptions = listOf("Serif", "Sans-Serif", "Monospace", "Cursive")
             val customFontNames = customFonts.map { it.nameWithoutExtension }
             val hasCustomFonts = customFontNames.isNotEmpty()
 
@@ -2343,12 +2343,12 @@ fun AppearanceSettingsOverlay(
                                     detectTapGestures(
                                         onLongPress = { isDeleteMode = true },
                                         onTap = {
-                                            if (isDeleteMode) {
-                                                onRemoveFont(fontName)
-                                                isDeleteMode = false
-                                            } else {
-                                                onFontStyleChange(fontName)
-                                            }
+                                             if (isDeleteMode) {
+                                                 onRemoveFont(fontName)
+                                                 isDeleteMode = false
+                                             } else {
+                                                 onFontStyleChange(fontName)
+                                             }
                                         }
                                     )
                                 },
@@ -2392,11 +2392,11 @@ fun AppearanceSettingsOverlay(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Defined themes for selection
+            // Defined themes for selection: 0 = Dark, 1 = Light, 2 = Paper
             val themes = listOf(
-                Triple("Paper", Color(0xFFFEF9F3), Color(0xFF5B4636)),
                 Triple("Dark", Color(0xFF131313), Color(0xFFE0E0E0)),
-                Triple("Light", Color(0xFFEEECED), Color.Black)
+                Triple("Light", Color(0xFFEEECED), Color.Black),
+                Triple("Paper", Color(0xFFFEF9F3), Color(0xFF5B4636))
             )
 
             LazyRow(
