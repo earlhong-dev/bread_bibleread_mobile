@@ -1,6 +1,8 @@
 package com.bibleread.bread.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -52,6 +54,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Paint
@@ -140,6 +143,8 @@ fun BibleScreen(
     val selectedVerses = remember { mutableStateSetOf<String>() }
 
     var showColorPickerRow by rememberSaveable { mutableStateOf(false) }
+    var showNoColorNotif by remember { mutableStateOf(false) }
+    var isChapterPillExpanded by rememberSaveable { mutableStateOf(true) }
 
     val highlights = vm.highlights
 
@@ -574,7 +579,7 @@ fun BibleScreen(
 
         // ── Scripture toolbar (bottom-center) ─────────────────────────────────
         AnimatedVisibility(
-            visible = contentVisible,
+            visible = headerReady,
             enter = fadeIn(tween(220)) + slideInVertically { it / 2 },
             exit = fadeOut(tween(160)) + slideOutVertically { it / 2 },
             modifier = Modifier
@@ -582,172 +587,395 @@ fun BibleScreen(
                 .padding(bottom = 24.dp)
         ) {
             val context = LocalContext.current
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Pill — appearance, share, draw, bookmark, highlight color circle
-                Surface(
-                    shape = RoundedCornerShape(50.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 4.dp,
-                    shadowElevation = 0.dp,
-                    modifier = Modifier
-                        .height(52.dp)
-                        .drawBehind {
-                            drawIntoCanvas { canvas ->
-                                val paint = Paint().apply {
-                                    asFrameworkPaint().apply {
-                                        isAntiAlias = true
-                                        color = android.graphics.Color.TRANSPARENT
-                                        setShadowLayer(
-                                            8f, 0f, 2f,
-                                            android.graphics.Color.argb(120, 0, 0, 0)
+                AnimatedVisibility(
+                    visible = showNoColorNotif,
+                    enter = fadeIn(tween(200)) + slideInVertically { it / 2 },
+                    exit = fadeOut(tween(200)) + slideOutVertically { it / 2 }
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(50.dp),
+                        color = Color(0xCC1A1A1A),
+                        tonalElevation = 0.dp
+                    ) {
+                        Text(
+                            text = "No Highlighter Color Selected",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                        )
+                    }
+                }
+                // ── Smart Ease Animated Widths ──
+                val smartEaseSpec = tween<androidx.compose.ui.unit.Dp>(
+                    durationMillis = 350,
+                    easing = FastOutSlowInEasing
+                )
+                val leftWidth by animateDpAsState(
+                    targetValue = if (!isChapterPillExpanded) 232.dp else 52.dp,
+                    animationSpec = smartEaseSpec,
+                    label = "leftWidth"
+                )
+                val rightWidth by animateDpAsState(
+                    targetValue = if (!isChapterPillExpanded) 52.dp else 232.dp,
+                    animationSpec = smartEaseSpec,
+                    label = "rightWidth"
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val maxChapter = BIBLE_BOOKS[selectedBook] ?: 1
+
+                    // ── LEFT ELEMENT (Pill <-> Circle with Smart Ease Morph) ──
+                    Surface(
+                        shape = RoundedCornerShape(50.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier
+                            .width(leftWidth)
+                            .height(52.dp)
+                            .drawBehind {
+                                drawIntoCanvas { canvas ->
+                                    val paint = Paint().apply {
+                                        asFrameworkPaint().apply {
+                                            isAntiAlias = true
+                                            color = android.graphics.Color.TRANSPARENT
+                                            setShadowLayer(
+                                                8f, 0f, 2f,
+                                                android.graphics.Color.argb(120, 0, 0, 0)
+                                            )
+                                        }
+                                    }
+                                    val cornerRadius = size.height / 2f
+                                    canvas.drawRoundRect(
+                                        left = 0f,
+                                        top = 0f,
+                                        right = size.width,
+                                        bottom = size.height,
+                                        radiusX = cornerRadius,
+                                        radiusY = cornerRadius,
+                                        paint = paint
+                                    )
+                                }
+                            }
+                    ) {
+                        AnimatedContent(
+                            targetState = isChapterPillExpanded,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(220, delayMillis = 60, easing = FastOutSlowInEasing)) togetherWith
+                                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                            },
+                            label = "leftContent"
+                        ) { expanded ->
+                            if (!expanded) {
+                                // Full Toolbar Row
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                ) {
+                                    // Share
+                                    IconButton(
+                                        onClick = {
+                                            val shareText = "$selectedBook $targetChapter"
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, null))
+                                        },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_share2_lucide),
+                                            contentDescription = "Share",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    // Appearance settings
+                                    IconButton(
+                                        onClick = { onOpenAppearance() },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_settings2),
+                                            contentDescription = "Appearance",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    // Draw / annotate
+                                    IconButton(
+                                        onClick = { /* TODO: draw mode */ },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_pencil),
+                                            contentDescription = "Draw",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    // Bookmark / Highlight selected verses
+                                    val allHighlighted = selectedVerses.isNotEmpty() &&
+                                        selectedVerses.all { vm.highlights[it] != null }
+                                    val hasSelection = selectedVerses.isNotEmpty()
+                                    IconButton(
+                                        enabled = hasSelection,
+                                        onClick = {
+                                            if (allHighlighted) {
+                                                selectedVerses.toSet().forEach { vm.removeHighlight(it) }
+                                                selectedVerses.clear()
+                                            } else {
+                                                val color = vm.selectedHighlightColor.value
+                                                if (color != null) {
+                                                    vm.applyHighlight(selectedVerses.toSet(), color)
+                                                    selectedVerses.clear()
+                                                } else {
+                                                    showNoColorNotif = true
+                                                    coroutineScope.launch {
+                                                        delay(2000)
+                                                        showNoColorNotif = false
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(
+                                                if (allHighlighted) R.drawable.ic_bookmark_filled
+                                                else R.drawable.ic_bookmark
+                                            ),
+                                            contentDescription = "Bookmark",
+                                            tint = when {
+                                                !hasSelection -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                                                allHighlighted -> Color.White
+                                                else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            },
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    // Highlight color circle — shows active color, opens color picker
+                                    val activeHighlightColor = vm.selectedHighlightColor.value
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clickable(
+                                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                indication = null
+                                            ) {
+                                                showColorPickerRow = !showColorPickerRow
+                                            }
+                                    ) {
+                                        if (activeHighlightColor != null) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(22.dp)
+                                                    .background(color = activeHighlightColor, shape = CircleShape)
+                                                    .border(1.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), CircleShape)
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(22.dp)
+                                                    .clip(CircleShape)
+                                                    .drawBehind {
+                                                        val sweep = Brush.sweepGradient(
+                                                            colors = listOf(
+                                                                Color(0xFFFF6B6B), // vivid coral
+                                                                Color(0xFFFF9F43), // vivid orange
+                                                                Color(0xFFFECA57), // vivid yellow
+                                                                Color(0xFF1DD1A1), // vivid teal
+                                                                Color(0xFF54A0FF), // vivid blue
+                                                                Color(0xFFA55EEA), // vivid purple
+                                                                Color(0xFFFD79A8), // vivid pink
+                                                                Color(0xFFFF6B6B), // back to vivid coral
+                                                            ),
+                                                            center = Offset(size.width / 2f, size.height / 2f)
+                                                        )
+                                                        drawCircle(
+                                                            brush = sweep,
+                                                            radius = size.minDimension / 2f
+                                                        )
+                                                    }
+                                                    .border(1.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), CircleShape)
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Collapsed Circle Icon — tapping it expands back to toolbar pill
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            isChapterPillExpanded = false
+                                        }
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_settings2),
+                                        contentDescription = "Show Toolbar",
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ── RIGHT ELEMENT (Circle <-> Pill with Smart Ease Morph) ──
+                    Surface(
+                        shape = RoundedCornerShape(50.dp),
+                        color = Color.White,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier
+                            .width(rightWidth)
+                            .height(52.dp)
+                            .drawBehind {
+                                drawIntoCanvas { canvas ->
+                                    val paint = Paint().apply {
+                                        asFrameworkPaint().apply {
+                                            isAntiAlias = true
+                                            color = android.graphics.Color.TRANSPARENT
+                                            setShadowLayer(
+                                                8f, 0f, 2f,
+                                                android.graphics.Color.argb(120, 0, 0, 0)
+                                            )
+                                        }
+                                    }
+                                    val cornerRadius = size.height / 2f
+                                    canvas.drawRoundRect(
+                                        left = 0f,
+                                        top = 0f,
+                                        right = size.width,
+                                        bottom = size.height,
+                                        radiusX = cornerRadius,
+                                        radiusY = cornerRadius,
+                                        paint = paint
+                                    )
+                                }
+                            }
+                    ) {
+                        AnimatedContent(
+                            targetState = isChapterPillExpanded,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(220, delayMillis = 60, easing = FastOutSlowInEasing)) togetherWith
+                                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                            },
+                            label = "rightContent"
+                        ) { expanded ->
+                            if (!expanded) {
+                                // Chapter Number Circle (clickable to expand)
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .clickable(
+                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            isChapterPillExpanded = true
+                                        }
+                                ) {
+                                    Text(
+                                        text = targetChapter.toString(),
+                                        color = Color(0xFF1A1A1A),
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = currentFontFamily
+                                    )
+                                }
+                            } else {
+                                // Chapter Navigation Pill
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp)
+                                ) {
+                                    // Previous Chapter Button
+                                    val hasPrev = targetChapter > 1
+                                    IconButton(
+                                        enabled = hasPrev,
+                                        onClick = {
+                                            if (hasPrev) {
+                                                requestChapter(selectedBook, targetChapter - 1)
+                                            }
+                                        },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_chevron_left),
+                                            contentDescription = "Previous Chapter",
+                                            tint = if (hasPrev) Color(0xFF1A1A1A) else Color(0xFF1A1A1A).copy(alpha = 0.25f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    // Center: Chapter Name / Book Selection
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable(
+                                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                indication = null
+                                            ) {
+                                                onOpenBookSelection { book, chapter ->
+                                                    requestChapter(book, chapter)
+                                                }
+                                            }
+                                    ) {
+                                        Text(
+                                            text = "Chapter $targetChapter",
+                                            color = Color(0xFF1A1A1A),
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = currentFontFamily
+                                        )
+                                    }
+
+                                    // Next Chapter Button
+                                    val hasNext = targetChapter < maxChapter
+                                    IconButton(
+                                        enabled = hasNext,
+                                        onClick = {
+                                            if (hasNext) {
+                                                requestChapter(selectedBook, targetChapter + 1)
+                                            }
+                                        },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_chevron_right),
+                                            contentDescription = "Next Chapter",
+                                            tint = if (hasNext) Color(0xFF1A1A1A) else Color(0xFF1A1A1A).copy(alpha = 0.25f),
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
-                                val cornerRadius = size.height / 2f
-                                canvas.drawRoundRect(
-                                    left = 0f,
-                                    top = 0f,
-                                    right = size.width,
-                                    bottom = size.height,
-                                    radiusX = cornerRadius,
-                                    radiusY = cornerRadius,
-                                    paint = paint
-                                )
                             }
                         }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 6.dp)
-                    ) {
-                        // Share
-                        IconButton(
-                            onClick = {
-                                val shareText = "$selectedBook $targetChapter"
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, shareText)
-                                }
-                                context.startActivity(Intent.createChooser(intent, null))
-                            },
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_share2_lucide),
-                                contentDescription = "Share",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Appearance settings
-                        IconButton(
-                            onClick = { onOpenAppearance() },
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_settings2),
-                                contentDescription = "Appearance",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Draw / annotate
-                        IconButton(
-                            onClick = { /* TODO: draw mode */ },
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_pencil),
-                                contentDescription = "Draw",
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Bookmark / Highlight selected verses
-                        val allHighlighted = selectedVerses.isNotEmpty() &&
-                            selectedVerses.all { vm.highlights[it] != null }
-                        IconButton(
-                            onClick = {
-                                if (allHighlighted) {
-                                    // Remove highlights from all selected verses
-                                    selectedVerses.toSet().forEach { vm.removeHighlight(it) }
-                                    selectedVerses.clear()
-                                } else {
-                                    val color = vm.selectedHighlightColor.value
-                                    if (color != null && selectedVerses.isNotEmpty()) {
-                                        vm.applyHighlight(selectedVerses.toSet(), color)
-                                        selectedVerses.clear()
-                                    }
-                                }
-                            },
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(
-                                    if (allHighlighted) R.drawable.ic_bookmark_filled
-                                    else R.drawable.ic_bookmark
-                                ),
-                                contentDescription = "Bookmark",
-                                tint = if (allHighlighted)
-                                    Color.White
-                                else
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Highlight color circle — shows active color, opens color picker
-                        val activeHighlightColor = vm.selectedHighlightColor.value
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    showColorPickerRow = !showColorPickerRow
-                                }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .background(
-                                        color = activeHighlightColor
-                                            ?: MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                                        shape = CircleShape
-                                    )
-                                    .border(
-                                        1.5.dp,
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                                        CircleShape
-                                    )
-                            )
-                        }
                     }
-                }
-
-                // Chapter number circle — sits right of the pill
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .shadow(6.dp, CircleShape)
-                        .background(Color.White, CircleShape)
-                ) {
-                    Text(
-                        text = targetChapter.toString(),
-                        color = Color(0xFF1A1A1A),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = currentFontFamily
-                    )
                 }
             }
         }
