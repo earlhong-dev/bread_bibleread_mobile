@@ -280,11 +280,10 @@ fun MainApp(dbReady: State<Boolean>) {
                 .fillMaxSize()
                 .then(
                     if (currentRoute != null && currentRoute != Screen.Splash.route)
-                        Modifier.statusBarsPadding()
+                        Modifier.statusBarsPadding().navigationBarsPadding()
                     else
                         Modifier
-                )
-                .navigationBarsPadding(),
+                ),
             enterTransition = { EnterTransition.None },
             exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },

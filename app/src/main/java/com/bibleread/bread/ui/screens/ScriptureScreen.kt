@@ -1545,13 +1545,18 @@ fun BookSelectionOverlay(
                     visible = carouselVisible,
                     enter = fadeIn(animationSpec = tween(500))
                 ) {
-                    Column {
+                    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+                    val isSmallScreen = screenHeight < 760.dp
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         // Carousel
                         LazyRow(
                             state = listState,
                             contentPadding = PaddingValues(
                                 horizontal = (LocalConfiguration.current.screenWidthDp.dp - cardWidth) / 2,
-                                vertical = 16.dp
+                                vertical = if (isSmallScreen) 8.dp else 16.dp
                             ),
                             horizontalArrangement = Arrangement.spacedBy(spacing),
                             modifier = Modifier
@@ -1618,10 +1623,10 @@ fun BookSelectionOverlay(
                                         ) {
                                             when {
                                                 index < centerIndex -> carouselScope.launch {
-                                                    listState.animateScrollToItem((centerIndex - 1).coerceAtLeast(0))
+                                                     listState.animateScrollToItem((centerIndex - 1).coerceAtLeast(0))
                                                 }
                                                 index > centerIndex -> carouselScope.launch {
-                                                    listState.animateScrollToItem((centerIndex + 1).coerceAtMost(bookItems.lastIndex))
+                                                     listState.animateScrollToItem((centerIndex + 1).coerceAtMost(bookItems.lastIndex))
                                                 }
                                                 // center — no action, Read button handles opening
                                             }
@@ -1638,7 +1643,7 @@ fun BookSelectionOverlay(
                                         Box(modifier = cardModifier.background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.09f)))
                                     }
                                     // Book name below card
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(if (isSmallScreen) 6.dp else 10.dp))
                                     BoxWithConstraints(
                                         modifier = Modifier.width(cardWidth),
                                         contentAlignment = Alignment.Center
@@ -1695,7 +1700,7 @@ fun BookSelectionOverlay(
                             }
 
                             // Reading Progress
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(if (isSmallScreen) 8.dp else 14.dp))
                             val readCount   = getReadCount(centerBook.name)
                             val totalCount  = getTotalCount(centerBook.name).coerceAtLeast(1)
                             val progress    = readCount / totalCount.toFloat()
@@ -2118,6 +2123,8 @@ fun AppearanceSettingsOverlay(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(

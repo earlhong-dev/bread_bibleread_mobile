@@ -278,11 +278,13 @@ fun SplashScreen(
     val context = LocalContext.current
     val view = LocalView.current
 
-    // Make top system status bar icons dark/black for the yellow background & ensure transparent system bars
+    // Make top status bar and bottom nav bar icons dark/black for the yellow background & ensure transparent system bars
     DisposableEffect(Unit) {
         val window = (view.context as? Activity)?.window
         if (window != null) {
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = true
+            insetsController.isAppearanceLightNavigationBars = true
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
         }
