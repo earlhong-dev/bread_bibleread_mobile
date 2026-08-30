@@ -77,6 +77,15 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("font_style", style).apply()
     }
 
+    var scriptureFontStyle by mutableStateOf(prefs.getString("scripture_font_style", fontStyle) ?: fontStyle)
+        private set
+
+    fun saveScriptureFontStyle(style: String) {
+        if (style == scriptureFontStyle) return
+        scriptureFontStyle = style
+        prefs.edit().putString("scripture_font_style", style).apply()
+    }
+
     var selectedThemeIndex by mutableStateOf(prefs.getInt("theme_index", 0)) // Default to 0 (Dark)
         private set
 
@@ -221,6 +230,9 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
             // If the deleted font was currently selected, revert to default
             if (fontStyle == fontName) {
                 saveFontStyle("Sans-Serif")
+            }
+            if (scriptureFontStyle == fontName) {
+                saveScriptureFontStyle("Sans-Serif")
             }
         }
     }

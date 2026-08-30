@@ -395,7 +395,7 @@ fun MainApp(dbReady: State<Boolean>) {
                         )
                         }
                     }
-                    // Appearance overlay
+                    // Appearance overlay (Bible Settings)
                     if (showAppearance) {
                         val fontFileLauncher = rememberLauncherForActivityResult(
                             contract = ActivityResultContracts.OpenDocument()
@@ -406,9 +406,7 @@ fun MainApp(dbReady: State<Boolean>) {
                                 .background(MaterialTheme.colorScheme.background)
                                 .pointerInput(Unit) { detectTapGestures { } }
                         ) {
-                        AppearanceSettingsOverlay(
-                            currentFontSize = bibleVm.fontSize,
-                            onFontSizeChange = { bibleVm.saveFontSize(it) },
+                        BibleSettingsOverlay(
                             currentFontStyle = bibleVm.fontStyle,
                             onFontStyleChange = { bibleVm.saveFontStyle(it) },
                             customFonts = bibleVm.customFonts,
@@ -439,9 +437,7 @@ fun MainApp(dbReady: State<Boolean>) {
                 val fontFileLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.OpenDocument()
                 ) { uri -> if (uri != null) bibleVm.importCustomFont(uri) }
-                AppearanceSettingsOverlay(
-                    currentFontSize = bibleVm.fontSize,
-                    onFontSizeChange = { bibleVm.saveFontSize(it) },
+                BibleSettingsOverlay(
                     currentFontStyle = bibleVm.fontStyle,
                     onFontStyleChange = { bibleVm.saveFontStyle(it) },
                     customFonts = bibleVm.customFonts,

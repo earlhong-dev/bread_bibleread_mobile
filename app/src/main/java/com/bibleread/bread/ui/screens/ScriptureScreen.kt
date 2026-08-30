@@ -85,6 +85,9 @@ import androidx.core.graphics.toColorInt
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import java.io.File
 
 val BIBLE_BOOKS = mapOf(
@@ -137,13 +140,14 @@ fun BibleScreen(
     var targetChapter by rememberSaveable { mutableIntStateOf(vm.lastChapter) }
 
     val fontSize = vm.fontSize
-    val fontStyle = vm.fontStyle
+    val scriptureFontStyle = vm.scriptureFontStyle
     var showTranslationPicker by rememberSaveable { mutableStateOf(false) }
 
     val selectedVerses = remember { mutableStateSetOf<String>() }
 
     var showColorPickerRow by rememberSaveable { mutableStateOf(false) }
     var showChapterPicker by rememberSaveable { mutableStateOf(false) }
+    var showScriptureSettings by rememberSaveable { mutableStateOf(false) }
     var showNoColorNotif by remember { mutableStateOf(false) }
     var isChapterPillExpanded by rememberSaveable { mutableStateOf(true) }
     val highlights = vm.highlights
@@ -151,6 +155,7 @@ fun BibleScreen(
     // Intercept back button so system back dismisses popups first, or goes back to book selection
     androidx.activity.compose.BackHandler {
         when {
+            showScriptureSettings -> showScriptureSettings = false
             showChapterPicker -> showChapterPicker = false
             showColorPickerRow -> showColorPickerRow = false
             showTranslationPicker -> showTranslationPicker = false
@@ -243,8 +248,12 @@ fun BibleScreen(
     val swipeThresholdPx = with(swipeDensity) { 60.dp.toPx() }
     var swipeAccumulator by remember { mutableFloatStateOf(0f) }
 
-    val currentFontFamily = remember(fontStyle, vm.customFonts) {
-        getFontFamily(fontStyle, vm.customFonts)
+    val appFontFamily = remember(vm.fontStyle, vm.customFonts) {
+        getFontFamily(vm.fontStyle, vm.customFonts)
+    }
+
+    val scriptureFontFamily = remember(scriptureFontStyle, vm.customFonts) {
+        getFontFamily(scriptureFontStyle, vm.customFonts)
     }
 
     val showChapterLabel by remember(listState, contentVisible) {
@@ -290,21 +299,13 @@ fun BibleScreen(
                     Text(
                         text = selectedBook,
                         color = MaterialTheme.colorScheme.onBackground,
-                        fontFamily = currentFontFamily,
+                        fontFamily = scriptureFontFamily,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp,
                         maxLines = 1,
                         fontSize = 20.sp,
                         softWrap = false,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            onOpenBookSelection { book, chapter ->
-                                requestChapter(book, chapter)
-                            }
-                        }
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
 
                     androidx.compose.animation.AnimatedVisibility(
@@ -316,7 +317,7 @@ fun BibleScreen(
                         Text(
                             text = "Chapter $displayedChapterLabel",
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                            fontFamily = currentFontFamily,
+                            fontFamily = scriptureFontFamily,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -406,7 +407,7 @@ fun BibleScreen(
                                     Text(
                                         text = chapter.toString(),
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-                                        fontFamily = currentFontFamily,
+                                        fontFamily = scriptureFontFamily,
                                         fontSize = (fontSize * 3.55f).sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         letterSpacing = 2.sp
@@ -422,7 +423,7 @@ fun BibleScreen(
                                     Text(
                                         text = verse.heading,
                                         color = MaterialTheme.colorScheme.onBackground,
-                                        fontFamily = currentFontFamily,
+                                        fontFamily = scriptureFontFamily,
                                         fontSize = (fontSize * 1.1f).sp,
                                         fontWeight = FontWeight.Bold,
                                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -436,7 +437,7 @@ fun BibleScreen(
                                         Text(
                                             text = verse.subheading,
                                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                            fontFamily = currentFontFamily,
+                                            fontFamily = scriptureFontFamily,
                                             fontSize = (fontSize * 0.7f).sp,
                                             fontWeight = FontWeight.Normal,
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -481,13 +482,13 @@ fun BibleScreen(
                                         )
                                 ) {
                                     val normalTextColor = MaterialTheme.colorScheme.onBackground
-                                    val annotatedText = remember(verse, isSelected, fontSize, currentFontFamily, normalTextColor) {
+                                    val annotatedText = remember(verse, isSelected, fontSize, scriptureFontFamily, normalTextColor) {
                                         buildAnnotatedString {
                                             withStyle(
                                                 SpanStyle(
                                                     color = normalTextColor.copy(alpha = 0.5f),
                                                     fontWeight = FontWeight.Bold,
-                                                    fontFamily = currentFontFamily,
+                                                    fontFamily = scriptureFontFamily,
                                                     fontSize = (fontSize * 0.65f).sp,
                                                     textDecoration = if (isSelected)
                                                         androidx.compose.ui.text.style.TextDecoration.Underline
@@ -497,7 +498,7 @@ fun BibleScreen(
                                             withStyle(
                                                 SpanStyle(
                                                     color = normalTextColor,
-                                                    fontFamily = currentFontFamily,
+                                                    fontFamily = scriptureFontFamily,
                                                     fontSize = fontSize.sp,
                                                     textDecoration = if (isSelected)
                                                         androidx.compose.ui.text.style.TextDecoration.Underline
@@ -547,7 +548,7 @@ fun BibleScreen(
                                 ) {
                                     Surface(
                                         onClick = {
-                                            if (isRead) vm.unmarkChapterRead(selectedBook, chapter)
+                                             if (isRead) vm.unmarkChapterRead(selectedBook, chapter)
                                             else vm.markChapterRead(selectedBook, chapter)
                                         },
                                         shape = RoundedCornerShape(50.dp),
@@ -577,7 +578,7 @@ fun BibleScreen(
                                                     color = MaterialTheme.colorScheme.background,
                                                     fontSize = 12.sp,
                                                     fontWeight = FontWeight.SemiBold,
-                                                    fontFamily = currentFontFamily
+                                                    fontFamily = appFontFamily
                                                 )
                                             }
                                         }
@@ -594,7 +595,7 @@ fun BibleScreen(
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
-                                        fontFamily = currentFontFamily,
+                                        fontFamily = appFontFamily,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
@@ -603,7 +604,7 @@ fun BibleScreen(
                                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Normal,
-                                        fontFamily = currentFontFamily,
+                                        fontFamily = appFontFamily,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 }
@@ -742,7 +743,7 @@ fun BibleScreen(
                                 ) {
                                     // Appearance settings
                                     IconButton(
-                                        onClick = { onOpenAppearance() },
+                                        onClick = { showScriptureSettings = true },
                                         modifier = Modifier.size(44.dp)
                                     ) {
                                         Icon(
@@ -960,7 +961,7 @@ fun BibleScreen(
                                         color = Color(0xFF1A1A1A),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        fontFamily = currentFontFamily
+                                        fontFamily = appFontFamily
                                     )
                                 }
                             } else {
@@ -1009,7 +1010,7 @@ fun BibleScreen(
                                                 color = Color(0xFF1A1A1A),
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                fontFamily = currentFontFamily
+                                                fontFamily = appFontFamily
                                             )
                                         }
                                     }
@@ -1163,14 +1164,14 @@ fun BibleScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                             color = Color.White,
-                            fontFamily = currentFontFamily,
+                            fontFamily = appFontFamily,
                             modifier = Modifier.padding(bottom = 2.dp)
                         )
                         Text(
                             text = "Choose or create a color for selected verses",
                             fontSize = 12.sp,
                             color = Color.White.copy(alpha = 0.5f),
-                            fontFamily = currentFontFamily,
+                            fontFamily = appFontFamily,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
@@ -1251,7 +1252,7 @@ fun BibleScreen(
                                             text = "Add Custom Color?",
                                             color = Color.White.copy(alpha = 0.35f),
                                             fontSize = 12.sp,
-                                            fontFamily = currentFontFamily,
+                                            fontFamily = appFontFamily,
                                             fontWeight = FontWeight.Medium
                                         )
                                     }
@@ -1470,14 +1471,14 @@ fun BibleScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                             color = Color.White,
-                            fontFamily = currentFontFamily,
+                            fontFamily = appFontFamily,
                             modifier = Modifier.padding(bottom = 2.dp)
                         )
                         Text(
                             text = "Select Chapter ($maxBookChapters total)",
                             fontSize = 12.sp,
                             color = Color.White.copy(alpha = 0.5f),
-                            fontFamily = currentFontFamily,
+                            fontFamily = appFontFamily,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
@@ -1567,7 +1568,7 @@ fun BibleScreen(
                                                         color = if (isCurrent) Color.Black else Color.White,
                                                         fontSize = 15.sp,
                                                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                                        fontFamily = currentFontFamily
+                                                        fontFamily = appFontFamily
                                                     )
                                                     if (isRead && !isCurrent) {
                                                         Box(
@@ -1652,6 +1653,378 @@ fun BibleScreen(
                                         tint = if (currentChapterPage < totalChapterPages - 1) Color.White else Color.White.copy(alpha = 0.2f),
                                         modifier = Modifier.size(18.dp)
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Scripture settings bottom sheet ──────────────────────────────────
+        // Scrim
+        AnimatedVisibility(
+            visible = showScriptureSettings,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(260)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { showScriptureSettings = false }
+            )
+        }
+
+        var scriptureSettingsDragOffsetY by remember { mutableFloatStateOf(0f) }
+        var isScriptureSettingsDragging by remember { mutableStateOf(false) }
+        val animatedScriptureSettingsOffset by animateFloatAsState(
+            targetValue = if (isScriptureSettingsDragging) scriptureSettingsDragOffsetY else 0f,
+            animationSpec = if (isScriptureSettingsDragging) snap() else tween(durationMillis = 220),
+            label = "scriptureSettingsDrag"
+        )
+        val fontFileLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument()
+        ) { uri -> if (uri != null) vm.importCustomFont(uri) }
+        var isScriptureFontDeleteMode by remember { mutableStateOf(false) }
+
+        AnimatedVisibility(
+            visible = showScriptureSettings,
+            enter = slideInVertically(animationSpec = tween(300)) { it },
+            exit = slideOutVertically(animationSpec = tween(260)) { it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { translationY = if (isScriptureSettingsDragging) scriptureSettingsDragOffsetY else animatedScriptureSettingsOffset }
+            ) {
+                Surface(
+                    color = Color(0xFF1A1A1A),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { isScriptureSettingsDragging = true },
+                                onDragEnd = {
+                                    isScriptureSettingsDragging = false
+                                    if (scriptureSettingsDragOffsetY > dismissThreshold) {
+                                        showScriptureSettings = false
+                                    }
+                                    scriptureSettingsDragOffsetY = 0f
+                                },
+                                onDragCancel = {
+                                    isScriptureSettingsDragging = false
+                                    scriptureSettingsDragOffsetY = 0f
+                                },
+                                onDrag = { _, dragAmount ->
+                                    scriptureSettingsDragOffsetY = (scriptureSettingsDragOffsetY + dragAmount.y).coerceAtLeast(0f)
+                                }
+                            )
+                        }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Drag handle
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .background(
+                                        Color.White,
+                                        RoundedCornerShape(50.dp)
+                                    )
+                            )
+                        }
+
+                        // Header Title: Scripture Settings
+                        Text(
+                            text = "Scripture Settings",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = Color.White,
+                            fontFamily = appFontFamily,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                        ) {
+                            // ── Preview Section ───────────────────────────────────
+                            Text(
+                                text = "Preview",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                fontFamily = appFontFamily
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White.copy(alpha = 0.06f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                            ) {
+                                Text(
+                                    text = buildAnnotatedString {
+                                        withStyle(
+                                            SpanStyle(
+                                                color = Color.White.copy(alpha = 0.5f),
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = getFontFamily(scriptureFontStyle, vm.customFonts),
+                                                fontSize = (fontSize * 0.65f).sp
+                                            )
+                                        ) { append("1  ") }
+                                        withStyle(
+                                            SpanStyle(
+                                                color = Color.White,
+                                                fontFamily = getFontFamily(scriptureFontStyle, vm.customFonts),
+                                                fontSize = fontSize.sp
+                                            )
+                                        ) { append("Nang pasimula ay naroon na ang Salita, at ang Salita ay kasama ng Diyos, at ang Salita ay Diyos.") }
+                                    },
+                                    lineHeight = (fontSize * 1.9).sp,
+                                    modifier = Modifier.padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 18.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // ── Font Sizing Section ──────────────────────────────
+                            val fontSizeLabel = when (fontSize.toInt()) {
+                                14 -> "Extra Small"
+                                16 -> "Small"
+                                18 -> "Normal"
+                                20 -> "Medium"
+                                22 -> "Large"
+                                24 -> "Extra Large"
+                                else -> "Custom"
+                            }
+
+                            @OptIn(ExperimentalMaterial3Api::class)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.foundation.Canvas(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp)
+                                ) {
+                                    val stepsCount = 6
+                                    val trackWidth = size.width
+                                    val stepWidth = trackWidth / (stepsCount - 1)
+                                    val valuePerStep = (24f - 14f) / (stepsCount - 1)
+
+                                    // Draw horizontal track
+                                    drawLine(
+                                        color = Color.White.copy(alpha = 0.2f),
+                                        start = Offset(0f, size.height / 2),
+                                        end = Offset(trackWidth, size.height / 2),
+                                        strokeWidth = 2.dp.toPx(),
+                                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                    )
+
+                                    val activeTrackWidth = ((fontSize - 14f) / (24f - 14f)) * trackWidth
+                                    drawLine(
+                                        color = Color.White,
+                                        start = Offset(0f, size.height / 2),
+                                        end = Offset(activeTrackWidth, size.height / 2),
+                                        strokeWidth = 2.dp.toPx(),
+                                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                    )
+
+                                    // Draw vertical ticks
+                                    for (i in 0 until stepsCount) {
+                                        val x = i * stepWidth
+                                        val tickValue = 14f + (i * valuePerStep)
+                                        val isActive = tickValue <= fontSize
+
+                                        drawLine(
+                                            color = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
+                                            start = Offset(x, size.height / 2 - 6.dp.toPx()),
+                                            end = Offset(x, size.height / 2 + 6.dp.toPx()),
+                                            strokeWidth = 2.dp.toPx(),
+                                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                        )
+                                    }
+                                }
+                                Slider(
+                                    value = fontSize,
+                                    onValueChange = { vm.saveFontSize(it) },
+                                    valueRange = 14f..24f,
+                                    steps = 4,
+                                    thumb = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(22.dp)
+                                                .background(Color.White, CircleShape)
+                                        )
+                                    },
+                                    colors = SliderDefaults.colors(
+                                        activeTrackColor = Color.Transparent,
+                                        inactiveTrackColor = Color.Transparent,
+                                        activeTickColor = Color.Transparent,
+                                        inactiveTickColor = Color.Transparent
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            Text(
+                                text = fontSizeLabel,
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 12.sp,
+                                fontFamily = appFontFamily,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+
+                            Spacer(modifier = Modifier.height(18.dp))
+
+                            // ── Font Style Section ───────────────────────────────
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Font Style",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = appFontFamily
+                                )
+                                Surface(
+                                    onClick = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
+                                    shape = CircleShape,
+                                    color = Color.White.copy(alpha = 0.1f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        0.5.dp, Color.White.copy(alpha = 0.25f)
+                                    ),
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_plus_lucide),
+                                            contentDescription = "Add Font",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            val builtInFontOptions = listOf("Serif", "Sans-Serif", "Monospace", "Cursive")
+                            val customFontNames = vm.customFonts.map { it.nameWithoutExtension }
+                            val hasCustomFonts = customFontNames.isNotEmpty()
+
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(builtInFontOptions) { fontName ->
+                                    val isSelected = fontName == scriptureFontStyle
+                                    Surface(
+                                        onClick = { vm.saveScriptureFontStyle(fontName) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) Color.White.copy(alpha = 0.18f) else Color.Transparent,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSelected) Color.White else Color.White.copy(alpha = 0.2f)
+                                        )
+                                    ) {
+                                        Text(
+                                            text = fontName,
+                                            fontFamily = getFontFamily(fontName),
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                        )
+                                    }
+                                }
+                                if (hasCustomFonts) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(1.dp)
+                                                .height(40.dp)
+                                                .background(Color.White.copy(alpha = 0.2f))
+                                        )
+                                    }
+                                    items(customFontNames) { fontName ->
+                                        val isSelected = fontName == scriptureFontStyle
+                                        Box(
+                                            modifier = Modifier
+                                                .background(
+                                                    if (isSelected) Color.White.copy(alpha = 0.18f) else Color.Transparent,
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (isSelected && !isScriptureFontDeleteMode) Color.White else Color.White.copy(alpha = 0.2f),
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .pointerInput(fontName) {
+                                                    detectTapGestures(
+                                                        onLongPress = { isScriptureFontDeleteMode = true },
+                                                        onTap = {
+                                                            if (isScriptureFontDeleteMode) {
+                                                                vm.removeCustomFont(fontName)
+                                                                isScriptureFontDeleteMode = false
+                                                            } else {
+                                                                vm.saveScriptureFontStyle(fontName)
+                                                            }
+                                                        }
+                                                    )
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = fontName,
+                                                fontFamily = getFontFamily(fontName, vm.customFonts),
+                                                color = Color.White,
+                                                fontSize = 14.sp,
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                            )
+                                            if (isScriptureFontDeleteMode) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .matchParentSize()
+                                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        painterResource(R.drawable.ic_trash_lucide),
+                                                        contentDescription = "Delete Font",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2655,12 +3028,10 @@ private fun BookRow(
     }
 }
 
-// ── Appearance Settings Overlay ───────────────────────────────────────────────
+// ── Bible Settings Overlay (App-wide settings: Font Style & Theme) ────────────
 
 @Composable
-fun AppearanceSettingsOverlay(
-    currentFontSize: Float,
-    onFontSizeChange: (Float) -> Unit,
+fun BibleSettingsOverlay(
     currentFontStyle: String,
     onFontStyleChange: (String) -> Unit,
     customFonts: List<File> = emptyList(),
@@ -2685,7 +3056,7 @@ fun AppearanceSettingsOverlay(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Appearance",
+                text = "Bible Settings",
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -2713,140 +3084,14 @@ fun AppearanceSettingsOverlay(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Preview",
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            val contentTextColor = MaterialTheme.colorScheme.onBackground
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = contentTextColor.copy(alpha = 0.05f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, contentTextColor.copy(alpha = 0.15f))
-            ) {
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(
-                            SpanStyle(
-                                color = contentTextColor.copy(alpha = 0.5f),
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = getFontFamily(currentFontStyle, customFonts),
-                                fontSize = (currentFontSize * 0.65f).sp
-                            )
-                        ) { append("1  ") }
-                        withStyle(
-                            SpanStyle(
-                                color = contentTextColor,
-                                fontFamily = getFontFamily(currentFontStyle, customFonts),
-                                fontSize = currentFontSize.sp
-                            )
-                        ) { append("Nang pasimula ay naroon na ang Salita, at ang Salita ay kasama ng Diyos, at ang Salita ay Diyos.") }
-                    },
-                    lineHeight = (currentFontSize * 1.9).sp,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val fontSizeLabel = when (currentFontSize.toInt()) {
-                14 -> "Extra Small"
-                16 -> "Small"
-                18 -> "Normal"
-                20 -> "Medium"
-                22 -> "Large"
-                24 -> "Extra Large"
-                else -> "Custom"
-            }
-
-            @OptIn(ExperimentalMaterial3Api::class)
-            Box(
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // If thumb is 24.dp, its center rests exactly 12.dp from the edges
-                val lineTrackColor = MaterialTheme.colorScheme.onBackground
-                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                    val stepsCount = 6
-                    val trackWidth = size.width
-                    val stepWidth = trackWidth / (stepsCount - 1)
-                    val valuePerStep = (24f - 14f) / (stepsCount - 1)
-                    
-                    // Draw horizontal track
-                    drawLine(
-                        color = lineTrackColor.copy(alpha = 0.2f),
-                        start = Offset(0f, size.height / 2),
-                        end = Offset(trackWidth, size.height / 2),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                    
-                    val activeTrackWidth = ((currentFontSize - 14f) / (24f - 14f)) * trackWidth
-                    drawLine(
-                        color = lineTrackColor,
-                        start = Offset(0f, size.height / 2),
-                        end = Offset(activeTrackWidth, size.height / 2),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                    
-                    // Draw vertical ticks
-                    for (i in 0 until stepsCount) {
-                        val x = i * stepWidth
-                        val tickValue = 14f + (i * valuePerStep)
-                        val isActive = tickValue <= currentFontSize
-                        
-                        drawLine(
-                            color = if (isActive) lineTrackColor else lineTrackColor.copy(alpha = 0.4f),
-                            start = Offset(x, size.height / 2 - 7.dp.toPx()),
-                            end = Offset(x, size.height / 2 + 7.dp.toPx()),
-                            strokeWidth = 2.dp.toPx(),
-                            cap = androidx.compose.ui.graphics.StrokeCap.Round
-                        )
-                    }
-                }
-                Slider(
-                    value = currentFontSize,
-                    onValueChange = onFontSizeChange,
-                    valueRange = 14f..24f,
-                    steps = 4,
-                    thumb = {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(MaterialTheme.colorScheme.onBackground, CircleShape)
-                        )
-                    },
-                    colors = SliderDefaults.colors(
-                        activeTrackColor = Color.Transparent,
-                        inactiveTrackColor = Color.Transparent,
-                        activeTickColor = Color.Transparent,
-                        inactiveTickColor = Color.Transparent
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            Text(
-                text = fontSizeLabel,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-                fontSize = 12.sp,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-
-
-            // Font Style header with "+ Add Fonts" button
+            // App Font Style header with "+ Add Fonts" button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Font Style",
+                    text = "App Font Style",
                     color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
@@ -2880,7 +3125,6 @@ fun AppearanceSettingsOverlay(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Built-in fonts
                 items(builtInFontOptions) { fontName ->
                     val isSelected = fontName == currentFontStyle
                     Surface(
@@ -2901,7 +3145,6 @@ fun AppearanceSettingsOverlay(
                         )
                     }
                 }
-                // Divider between built-in and custom
                 if (hasCustomFonts) {
                     item {
                         Box(
@@ -2911,7 +3154,6 @@ fun AppearanceSettingsOverlay(
                                 .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f))
                         )
                     }
-                    // Custom fonts
                     items(customFontNames) { fontName ->
                         val isSelected = fontName == currentFontStyle
                         Box(
@@ -2963,22 +3205,21 @@ fun AppearanceSettingsOverlay(
                                 }
                             }
                         }
-            }
-            }
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Theme section header
             Text(
-                text = "Theme",
+                text = "App Theme",
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Defined themes for selection: 0 = Dark, 1 = Light, 2 = Paper
             val themes = listOf(
                 Triple("Dark", Color(0xFF131313), Color(0xFFE0E0E0)),
                 Triple("Light", Color(0xFFEEECED), Color.Black),
@@ -3006,7 +3247,6 @@ fun AppearanceSettingsOverlay(
                             modifier = Modifier.padding(10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // Mini mockup box representing the theme layout
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -3015,7 +3255,6 @@ fun AppearanceSettingsOverlay(
                                     .padding(8.dp)
                             ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    // 3 mockup text lines
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth(0.9f)
@@ -3039,8 +3278,8 @@ fun AppearanceSettingsOverlay(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = themeName,
-                                color = if (isSelected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         }
