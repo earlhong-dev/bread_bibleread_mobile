@@ -268,6 +268,38 @@ fun MainApp(dbReady: State<Boolean>) {
         currentRoute != Screen.NewNote.route &&
         currentRoute != Screen.ViewNote.route
 
+    // Handle system back button across the entire app
+    androidx.activity.compose.BackHandler(
+        enabled = showScripture || showAppearance || showViewNote != null || (currentRoute != null && currentRoute != Screen.Reader.route && currentRoute != Screen.Splash.route)
+    ) {
+        when {
+            showAppearance -> {
+                showAppearance = false
+            }
+            showScripture -> {
+                if (bookSelectionCallback != null) {
+                    bookSelectionCallback?.invoke(bibleVm.lastBook, bibleVm.lastChapter)
+                    bookSelectionCallback = null
+                }
+                showScripture = false
+            }
+            showViewNote != null -> {
+                showViewNote = null
+                navController.popBackStack()
+            }
+            currentRoute == Screen.NewNote.route || currentRoute == Screen.ViewNote.route || currentRoute == Screen.Appearance.route -> {
+                navController.popBackStack()
+            }
+            currentRoute != null && currentRoute != Screen.Reader.route && currentRoute != Screen.Splash.route -> {
+                // If on another main tab (Journal, Community, Chats, Profile), go back to Bible tab instead of closing
+                navController.navigate(Screen.Reader.route) {
+                    popUpTo(Screen.Reader.route) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()

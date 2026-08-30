@@ -146,8 +146,18 @@ fun BibleScreen(
     var showChapterPicker by rememberSaveable { mutableStateOf(false) }
     var showNoColorNotif by remember { mutableStateOf(false) }
     var isChapterPillExpanded by rememberSaveable { mutableStateOf(true) }
-
     val highlights = vm.highlights
+
+    // Intercept back button so system back dismisses popups first, or goes back to book selection
+    androidx.activity.compose.BackHandler {
+        when {
+            showChapterPicker -> showChapterPicker = false
+            showColorPickerRow -> showColorPickerRow = false
+            showTranslationPicker -> showTranslationPicker = false
+            selectedVerses.isNotEmpty() -> selectedVerses.clear()
+            else -> onBack()
+        }
+    }
 
     val uiState by vm.uiState.collectAsState()
     val activeTranslation by vm.activeTranslation.collectAsState()
@@ -172,11 +182,15 @@ fun BibleScreen(
     // contentVisible: resets to false every time a chapter change is requested,
     // flips back to true when the new data arrives and is ready to render
     var contentVisible by remember { mutableStateOf(false) }
+
+    // highlightsVisible: triggers the highlight intro fade-in after content appears
+    var highlightsVisible by remember { mutableStateOf(false) }
     // ─────────────────────────────────────────────────────────────────────────
 
     // When chapter/book buttons are tapped, hide content immediately
     fun requestChapter(book: String, chapter: Int) {
         contentVisible = false
+        highlightsVisible = false
         selectedBook = book
         targetChapter = chapter
         vm.loadChapter(book, chapter, resetScroll = true)
@@ -206,6 +220,8 @@ fun BibleScreen(
             // Every load: fade in content
             delay(35)
             contentVisible = true
+            delay(120)
+            highlightsVisible = true
         }
     }
 
@@ -433,6 +449,15 @@ fun BibleScreen(
                                 val verseKey      = "${verse.book}-${verse.chapter}-${verse.verse}"
                                 val isSelected    = verseKey in selectedVerses
                                 val highlightColor = highlights[verseKey]
+                                val animatedHighlightAlpha by animateFloatAsState(
+                                    targetValue = if (highlightColor != null && highlightsVisible) 0.35f else 0f,
+                                    animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+                                    label = "highlightFade_${verseKey}"
+                                )
+                                val lastNonNullColor = remember { mutableStateOf(highlightColor ?: Color.Transparent) }
+                                if (highlightColor != null) {
+                                    lastNonNullColor.value = highlightColor
+                                }
                                 val verseLabel    = verse.display ?: verse.verse.toString()
                                 val hasHeading    = !verse.heading.isNullOrBlank()
 
@@ -487,7 +512,7 @@ fun BibleScreen(
                                         onTextLayout = { textLayout.value = it },
                                         lineHeight = (fontSize * 1.9).sp,
                                         modifier = Modifier.drawBehind {
-                                            if (highlightColor != null) {
+                                            if (animatedHighlightAlpha > 0f) {
                                                 textLayout.value?.let { layout ->
                                                     val hPad      = 5.dp.toPx()
                                                     val vPad      = 3.dp.toPx()
@@ -500,7 +525,7 @@ fun BibleScreen(
                                                         val top     = lineMid - textHeight / 2f - vPad
                                                         val bottom  = lineMid + textHeight / 2f + vPad
                                                         drawRoundRect(
-                                                            color = highlightColor.copy(alpha = 0.35f),
+                                                            color = lastNonNullColor.value.copy(alpha = animatedHighlightAlpha),
                                                             topLeft = Offset(left, top),
                                                             size = Size(right - left, bottom - top),
                                                             cornerRadius = CornerRadius(radius)
@@ -534,18 +559,27 @@ fun BibleScreen(
                                     ) {
                                         Box(
                                             contentAlignment = Alignment.Center,
-                                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
-                                        ) {
-                                            Text(
-                                                text = if (isRead) "✓ Read" else "Mark as Read",
-                                                color = if (isRead)
-                                                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                                else
-                                                    MaterialTheme.colorScheme.background,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontFamily = currentFontFamily
+                                            modifier = Modifier.padding(
+                                                horizontal = if (isRead) 14.dp else 18.dp,
+                                                vertical = 8.dp
                                             )
+                                        ) {
+                                            if (isRead) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_check_lucide),
+                                                    contentDescription = "Read",
+                                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "Mark as Read",
+                                                    color = MaterialTheme.colorScheme.background,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontFamily = currentFontFamily
+                                                )
+                                            }
                                         }
                                     }
 
@@ -695,8 +729,8 @@ fun BibleScreen(
                         AnimatedContent(
                             targetState = isChapterPillExpanded,
                             transitionSpec = {
-                                fadeIn(animationSpec = tween(220, delayMillis = 60, easing = FastOutSlowInEasing)) togetherWith
-                                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                                fadeIn(animationSpec = tween(durationMillis = 240, delayMillis = 450, easing = FastOutSlowInEasing)) togetherWith
+                                    fadeOut(animationSpec = tween(durationMillis = 100, easing = FastOutSlowInEasing))
                             },
                             label = "leftContent"
                         ) { expanded ->
@@ -903,8 +937,8 @@ fun BibleScreen(
                         AnimatedContent(
                             targetState = isChapterPillExpanded,
                             transitionSpec = {
-                                fadeIn(animationSpec = tween(220, delayMillis = 60, easing = FastOutSlowInEasing)) togetherWith
-                                    fadeOut(animationSpec = tween(140, easing = FastOutSlowInEasing))
+                                fadeIn(animationSpec = tween(durationMillis = 240, delayMillis = 450, easing = FastOutSlowInEasing)) togetherWith
+                                    fadeOut(animationSpec = tween(durationMillis = 100, easing = FastOutSlowInEasing))
                             },
                             label = "rightContent"
                         ) { expanded ->
@@ -958,24 +992,26 @@ fun BibleScreen(
                                     }
 
                                     // Center: Chapter Name / Book Selection
-                                    Box(
-                                        contentAlignment = Alignment.Center,
+                                    Surface(
+                                        onClick = { showChapterPicker = true },
+                                        shape = RoundedCornerShape(50.dp),
+                                        color = Color.Transparent,
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clickable(
-                                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                                indication = null
-                                            ) {
-                                                showChapterPicker = true
-                                            }
+                                            .height(44.dp)
                                     ) {
-                                        Text(
-                                            text = "Chapter $targetChapter",
-                                            color = Color(0xFF1A1A1A),
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = currentFontFamily
-                                        )
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            Text(
+                                                text = "Chapter $targetChapter",
+                                                color = Color(0xFF1A1A1A),
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = currentFontFamily
+                                            )
+                                        }
                                     }
 
                                     // Next Chapter Button
@@ -1110,7 +1146,7 @@ fun BibleScreen(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 12.dp, bottom = 20.dp)
+                                .padding(top = 12.dp, bottom = 16.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -1128,7 +1164,14 @@ fun BibleScreen(
                             fontSize = 20.sp,
                             color = Color.White,
                             fontFamily = currentFontFamily,
-                            modifier = Modifier.padding(bottom = 20.dp)
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                        Text(
+                            text = "Choose or create a color for selected verses",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontFamily = currentFontFamily,
+                            modifier = Modifier.padding(bottom = 16.dp)
                         )
 
                         // Color swatches with edge fades
@@ -1570,21 +1613,29 @@ fun BibleScreen(
                                     )
                                 }
 
-                                // Page dots
+                                // Page dots with Smart Ease morphing
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     for (i in 0 until totalChapterPages) {
                                         val isSelectedPage = i == currentChapterPage
+                                        val dotWidth by animateDpAsState(
+                                            targetValue = if (isSelectedPage) 18.dp else 6.dp,
+                                            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                                            label = "dotWidth_$i"
+                                        )
+                                        val dotAlpha by animateFloatAsState(
+                                            targetValue = if (isSelectedPage) 1f else 0.25f,
+                                            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                                            label = "dotAlpha_$i"
+                                        )
                                         Box(
                                             modifier = Modifier
                                                 .height(6.dp)
-                                                .width(if (isSelectedPage) 16.dp else 6.dp)
+                                                .width(dotWidth)
                                                 .clip(RoundedCornerShape(50.dp))
-                                                .background(
-                                                    if (isSelectedPage) Color.White else Color.White.copy(alpha = 0.25f)
-                                                )
+                                                .background(Color.White.copy(alpha = dotAlpha))
                                                 .clickable { currentChapterPage = i }
                                         )
                                     }
