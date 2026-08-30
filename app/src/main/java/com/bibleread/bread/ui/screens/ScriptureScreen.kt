@@ -143,6 +143,7 @@ fun BibleScreen(
     val selectedVerses = remember { mutableStateSetOf<String>() }
 
     var showColorPickerRow by rememberSaveable { mutableStateOf(false) }
+    var showChapterPicker by rememberSaveable { mutableStateOf(false) }
     var showNoColorNotif by remember { mutableStateOf(false) }
     var isChapterPillExpanded by rememberSaveable { mutableStateOf(true) }
 
@@ -513,11 +514,11 @@ fun BibleScreen(
                             }
                             item(key = "$selectedBook-$chapter-markread") {
                                 val isRead = vm.isChapterRead(selectedBook, chapter)
-                                Box(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 36.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
+                                        .padding(top = 12.dp, bottom = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Surface(
                                         onClick = {
@@ -529,23 +530,48 @@ fun BibleScreen(
                                             MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
                                         else
                                             MaterialTheme.colorScheme.onBackground,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(44.dp)
+                                        modifier = Modifier.wrapContentSize()
                                     ) {
-                                        Box(contentAlignment = Alignment.Center) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                                        ) {
                                             Text(
                                                 text = if (isRead) "✓ Read" else "Mark as Read",
                                                 color = if (isRead)
-                                                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                                                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                                 else
                                                     MaterialTheme.colorScheme.background,
-                                                fontSize = 14.sp,
+                                                fontSize = 12.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 fontFamily = currentFontFamily
                                             )
                                         }
                                     }
+
+                                    // Bible Version Credits
+                                    Spacer(modifier = Modifier.height(18.dp))
+                                    val isMbbtag = activeTranslation.startsWith("mbbtag", ignoreCase = true)
+                                    val titleCredit = if (isMbbtag) "Magandang Balita Biblia 2005" else TranslationManager.displayName(activeTranslation)
+                                    val copyrightCredit = if (isMbbtag) "© Philippine Bible Society" else "Public Domain"
+
+                                    Text(
+                                        text = titleCredit,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = currentFontFamily,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = copyrightCredit,
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        fontFamily = currentFontFamily,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
                                 }
                             }
                             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -680,6 +706,19 @@ fun BibleScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(horizontal = 6.dp)
                                 ) {
+                                    // Appearance settings
+                                    IconButton(
+                                        onClick = { onOpenAppearance() },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_settings2),
+                                            contentDescription = "Appearance",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
                                     // Share
                                     IconButton(
                                         onClick = {
@@ -695,19 +734,6 @@ fun BibleScreen(
                                         Icon(
                                             painter = painterResource(R.drawable.ic_share2_lucide),
                                             contentDescription = "Share",
-                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-
-                                    // Appearance settings
-                                    IconButton(
-                                        onClick = { onOpenAppearance() },
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_settings2),
-                                            contentDescription = "Appearance",
                                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -940,9 +966,7 @@ fun BibleScreen(
                                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                                 indication = null
                                             ) {
-                                                onOpenBookSelection { book, chapter ->
-                                                    requestChapter(book, chapter)
-                                                }
+                                                showChapterPicker = true
                                             }
                                     ) {
                                         Text(
@@ -1297,6 +1321,289 @@ fun BibleScreen(
                             },
                             onDismiss = { showColorPickerRow = false }
                         )
+                    }
+                }
+            }
+        }
+
+        // ── Chapter picker bottom sheet ───────────────────────────────────────
+        // Scrim
+        AnimatedVisibility(
+            visible = showChapterPicker,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(260)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { showChapterPicker = false }
+            )
+        }
+        // Sheet with slide-up/down + drag-to-close + pagination
+        var chapterDragOffsetY by remember { mutableFloatStateOf(0f) }
+        var isChapterDragging by remember { mutableStateOf(false) }
+        val animatedChapterOffset by animateFloatAsState(
+            targetValue = if (isChapterDragging) chapterDragOffsetY else 0f,
+            animationSpec = if (isChapterDragging) snap() else tween(durationMillis = 220),
+            label = "chapterSheetDrag"
+        )
+        val maxBookChapters = BIBLE_BOOKS[selectedBook] ?: 1
+        val pageSize = 20
+        val totalChapterPages = ((maxBookChapters - 1) / pageSize) + 1
+        var currentChapterPage by remember(selectedBook, targetChapter, showChapterPicker) {
+            mutableIntStateOf(((targetChapter - 1) / pageSize).coerceIn(0, (totalChapterPages - 1).coerceAtLeast(0)))
+        }
+
+        AnimatedVisibility(
+            visible = showChapterPicker,
+            enter = slideInVertically(animationSpec = tween(300)) { it },
+            exit = slideOutVertically(animationSpec = tween(260)) { it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { translationY = if (isChapterDragging) chapterDragOffsetY else animatedChapterOffset }
+            ) {
+                Surface(
+                    color = Color(0xFF1A1A1A),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { isChapterDragging = true },
+                                onDragEnd = {
+                                    isChapterDragging = false
+                                    if (chapterDragOffsetY > dismissThreshold) {
+                                        showChapterPicker = false
+                                    }
+                                    chapterDragOffsetY = 0f
+                                },
+                                onDragCancel = {
+                                    isChapterDragging = false
+                                    chapterDragOffsetY = 0f
+                                },
+                                onDrag = { _, dragAmount ->
+                                    chapterDragOffsetY = (chapterDragOffsetY + dragAmount.y).coerceAtLeast(0f)
+                                }
+                            )
+                        }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Drag handle
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .background(
+                                        Color.White,
+                                        RoundedCornerShape(50.dp)
+                                    )
+                            )
+                        }
+
+                        // Header Title: Book Name & Subtitle
+                        Text(
+                            text = selectedBook,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = Color.White,
+                            fontFamily = currentFontFamily,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                        Text(
+                            text = "Select Chapter ($maxBookChapters total)",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontFamily = currentFontFamily,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        // Paginated Chapter Grid with swipe gesture
+                        AnimatedContent(
+                            targetState = currentChapterPage,
+                            transitionSpec = {
+                                if (targetState > initialState) {
+                                    (slideInHorizontally { it } + fadeIn()).togetherWith(
+                                        slideOutHorizontally { -it } + fadeOut()
+                                    )
+                                } else {
+                                    (slideInHorizontally { -it } + fadeIn()).togetherWith(
+                                        slideOutHorizontally { it } + fadeOut()
+                                    )
+                                }
+                            },
+                            label = "chapterPageAnim"
+                        ) { page ->
+                            val startChapter = page * pageSize + 1
+                            val endChapter = (startChapter + pageSize - 1).coerceAtMost(maxBookChapters)
+                            val pageChapters = (startChapter..endChapter).toList()
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                                    .pointerInput(page, totalChapterPages) {
+                                        var pageSwipeAccum = 0f
+                                        val swipeThreshold = 40.dp.toPx()
+                                        detectHorizontalDragGestures(
+                                            onDragStart = { pageSwipeAccum = 0f },
+                                            onDragEnd = {
+                                                if (pageSwipeAccum < -swipeThreshold && currentChapterPage < totalChapterPages - 1) {
+                                                    currentChapterPage++
+                                                } else if (pageSwipeAccum > swipeThreshold && currentChapterPage > 0) {
+                                                    currentChapterPage--
+                                                }
+                                                pageSwipeAccum = 0f
+                                            },
+                                            onDragCancel = { pageSwipeAccum = 0f },
+                                            onHorizontalDrag = { _, dragAmount ->
+                                                pageSwipeAccum += dragAmount
+                                            }
+                                        )
+                                    },
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                pageChapters.chunked(5).forEach { rowChapters ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        for (chapterNum in rowChapters) {
+                                            val isCurrent = chapterNum == targetChapter
+                                            val isRead = vm.isChapterRead(selectedBook, chapterNum)
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .aspectRatio(1f)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(
+                                                        when {
+                                                            isCurrent -> Color.White
+                                                            isRead -> Color.White.copy(alpha = 0.15f)
+                                                            else -> Color.White.copy(alpha = 0.08f)
+                                                        }
+                                                    )
+                                                    .border(
+                                                        width = if (isCurrent) 0.dp else 1.dp,
+                                                        color = if (isCurrent) Color.Transparent else Color.White.copy(alpha = 0.12f),
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    )
+                                                    .clickable {
+                                                        showChapterPicker = false
+                                                        requestChapter(selectedBook, chapterNum)
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.Center
+                                                ) {
+                                                    Text(
+                                                        text = chapterNum.toString(),
+                                                        color = if (isCurrent) Color.Black else Color.White,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                                        fontFamily = currentFontFamily
+                                                    )
+                                                    if (isRead && !isCurrent) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .padding(top = 2.dp)
+                                                                .size(4.dp)
+                                                                .background(Color.White.copy(alpha = 0.6f), CircleShape)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Fill remaining slots in last row to maintain grid alignment
+                                        val emptySlots = 5 - rowChapters.size
+                                        for (i in 0 until emptySlots) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Pagination Navigation & Indicators (shown if more than 1 page)
+                        if (totalChapterPages > 1) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    enabled = currentChapterPage > 0,
+                                    onClick = { if (currentChapterPage > 0) currentChapterPage-- },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_chevron_left),
+                                        contentDescription = "Previous Page",
+                                        tint = if (currentChapterPage > 0) Color.White else Color.White.copy(alpha = 0.2f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                // Page dots
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    for (i in 0 until totalChapterPages) {
+                                        val isSelectedPage = i == currentChapterPage
+                                        Box(
+                                            modifier = Modifier
+                                                .height(6.dp)
+                                                .width(if (isSelectedPage) 16.dp else 6.dp)
+                                                .clip(RoundedCornerShape(50.dp))
+                                                .background(
+                                                    if (isSelectedPage) Color.White else Color.White.copy(alpha = 0.25f)
+                                                )
+                                                .clickable { currentChapterPage = i }
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+                                    enabled = currentChapterPage < totalChapterPages - 1,
+                                    onClick = { if (currentChapterPage < totalChapterPages - 1) currentChapterPage++ },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_chevron_right),
+                                        contentDescription = "Next Page",
+                                        tint = if (currentChapterPage < totalChapterPages - 1) Color.White else Color.White.copy(alpha = 0.2f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
