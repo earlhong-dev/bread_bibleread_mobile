@@ -368,7 +368,8 @@ fun MainApp(dbReady: State<Boolean>) {
                         initialFilter = "All Books",
                         onFilterChange = { bibleVm.saveBibleFilter(it) },
                         initialCarouselIndex = 0,
-                        onCarouselIndexChange = { bibleVm.saveBibleCarouselIndex(it) }
+                        onCarouselIndexChange = { bibleVm.saveBibleCarouselIndex(it) },
+                        showReadingProgress = bibleVm.showReadingProgress
                     )
                     // Scripture overlay
                     if (showScripture) {
@@ -412,6 +413,8 @@ fun MainApp(dbReady: State<Boolean>) {
                             customFonts = bibleVm.customFonts,
                             selectedThemeIndex = bibleVm.selectedThemeIndex,
                             onThemeChange = { bibleVm.saveThemeIndex(it) },
+                            showReadingProgress = bibleVm.showReadingProgress,
+                            onToggleReadingProgress = { bibleVm.saveShowReadingProgress(it) },
                             onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
                             onRemoveFont = { bibleVm.removeCustomFont(it) },
                             onClose = { showAppearance = false }
@@ -443,6 +446,8 @@ fun MainApp(dbReady: State<Boolean>) {
                     customFonts = bibleVm.customFonts,
                     selectedThemeIndex = bibleVm.selectedThemeIndex,
                     onThemeChange = { bibleVm.saveThemeIndex(it) },
+                    showReadingProgress = bibleVm.showReadingProgress,
+                    onToggleReadingProgress = { bibleVm.saveShowReadingProgress(it) },
                     onAddFont = { fontFileLauncher.launch(arrayOf("font/ttf", "font/otf", "*/*")) },
                     onRemoveFont = { bibleVm.removeCustomFont(it) },
                     onClose = { navController.popBackStack() }

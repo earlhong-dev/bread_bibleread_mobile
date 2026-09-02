@@ -1533,7 +1533,6 @@ fun BibleScreen(
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         for (chapterNum in rowChapters) {
-                                            val isCurrent = chapterNum == targetChapter
                                             val isRead = vm.isChapterRead(selectedBook, chapterNum)
 
                                             Box(
@@ -1542,15 +1541,12 @@ fun BibleScreen(
                                                     .aspectRatio(1f)
                                                     .clip(RoundedCornerShape(12.dp))
                                                     .background(
-                                                        when {
-                                                            isCurrent -> Color.White
-                                                            isRead -> Color.White.copy(alpha = 0.15f)
-                                                            else -> Color.White.copy(alpha = 0.08f)
-                                                        }
+                                                        if (isRead) Color(0xFF49AD67)
+                                                        else Color.White.copy(alpha = 0.08f)
                                                     )
                                                     .border(
-                                                        width = if (isCurrent) 0.dp else 1.dp,
-                                                        color = if (isCurrent) Color.Transparent else Color.White.copy(alpha = 0.12f),
+                                                        width = if (isRead) 0.dp else 1.dp,
+                                                        color = if (isRead) Color.Transparent else Color.White.copy(alpha = 0.12f),
                                                         shape = RoundedCornerShape(12.dp)
                                                     )
                                                     .clickable {
@@ -1559,26 +1555,13 @@ fun BibleScreen(
                                                     },
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Column(
-                                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                                    verticalArrangement = Arrangement.Center
-                                                ) {
-                                                    Text(
-                                                        text = chapterNum.toString(),
-                                                        color = if (isCurrent) Color.Black else Color.White,
-                                                        fontSize = 15.sp,
-                                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                                        fontFamily = appFontFamily
-                                                    )
-                                                    if (isRead && !isCurrent) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .padding(top = 2.dp)
-                                                                .size(4.dp)
-                                                                .background(Color.White.copy(alpha = 0.6f), CircleShape)
-                                                        )
-                                                    }
-                                                }
+                                                Text(
+                                                    text = chapterNum.toString(),
+                                                    color = Color.White,
+                                                    fontSize = 15.sp,
+                                                    fontWeight = if (isRead) FontWeight.Bold else FontWeight.Medium,
+                                                    fontFamily = appFontFamily
+                                                )
                                             }
                                         }
                                         // Fill remaining slots in last row to maintain grid alignment
@@ -2089,7 +2072,8 @@ fun BookSelectionOverlay(
     initialFilter: String = "All Books",
     onFilterChange: (String) -> Unit = {},
     initialCarouselIndex: Int = 0,
-    onCarouselIndexChange: (Int) -> Unit = {}
+    onCarouselIndexChange: (Int) -> Unit = {},
+    showReadingProgress: Boolean = true
 ) {
     val focusManager = LocalFocusManager.current
     var searchQuery by remember { mutableStateOf("") }
@@ -2658,63 +2642,85 @@ fun BookSelectionOverlay(
                                 }
                             }
 
-                            // Reading Progress
-                            Spacer(modifier = Modifier.height(if (isSmallScreen) 8.dp else 14.dp))
-                            val readCount   = getReadCount(centerBook.name)
-                            val totalCount  = getTotalCount(centerBook.name).coerceAtLeast(1)
-                            val progress    = readCount / totalCount.toFloat()
+                            // Reading Progress / Chapter Count
+                            if (showReadingProgress) {
+                                Spacer(modifier = Modifier.height(if (isSmallScreen) 8.dp else 14.dp))
+                                val readCount   = getReadCount(centerBook.name)
+                                val totalCount  = getTotalCount(centerBook.name).coerceAtLeast(1)
+                                val progress    = readCount / totalCount.toFloat()
 
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Reading Progress",
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = currentFontFamily
-                                    )
-                                    Text(
-                                        text = "$readCount / $totalCount",
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = currentFontFamily
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                // Custom tall progress bar with percentage label inside
-                                Box(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(22.dp)
-                                        .clip(RoundedCornerShape(50.dp))
-                                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
+                                        .padding(horizontal = 20.dp)
                                 ) {
-                                    // Fill
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Reading Progress",
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = currentFontFamily
+                                        )
+                                        Text(
+                                            text = "$readCount / $totalCount",
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = currentFontFamily
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    // Custom tall progress bar with percentage label inside
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(progress.coerceIn(0f, 1f))
-                                            .background(MaterialTheme.colorScheme.onBackground)
-                                    )
-                                    // Percentage label centered inside
+                                            .fillMaxWidth()
+                                            .height(22.dp)
+                                            .clip(RoundedCornerShape(50.dp))
+                                            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
+                                    ) {
+                                        // Fill
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                                .background(MaterialTheme.colorScheme.onBackground)
+                                        )
+                                        // Percentage label centered inside
+                                        Text(
+                                            text = "${(progress * 100).toInt()}%",
+                                            color = if (progress > 0.5f)
+                                                MaterialTheme.colorScheme.background
+                                            else
+                                                MaterialTheme.colorScheme.onBackground,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = currentFontFamily,
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.height(if (isSmallScreen) 10.dp else 16.dp))
+                                val totalCount = getTotalCount(centerBook.name).coerceAtLeast(1)
+                                AnimatedContent(
+                                    targetState = totalCount,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(150))
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) { chapters ->
                                     Text(
-                                        text = "${(progress * 100).toInt()}%",
-                                        color = if (progress > 0.5f)
-                                            MaterialTheme.colorScheme.background
-                                        else
-                                            MaterialTheme.colorScheme.onBackground,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        text = "$chapters Chapters",
+                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
                                         fontFamily = currentFontFamily,
-                                        modifier = Modifier.align(Alignment.Center)
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 }
                             }
@@ -2804,65 +2810,67 @@ fun BookSelectionOverlay(
                                             fontFamily = currentFontFamily
                                         )
                                     }
-                                    Text(
-                                        text = "$totalChapters Chapters",
-                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = currentFontFamily
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Reading Progress",
-                                            color = MaterialTheme.colorScheme.onBackground,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontFamily = currentFontFamily
-                                        )
+                                    if (showReadingProgress) {
                                         Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "$readCount/$totalChapters",
-                                                color = MaterialTheme.colorScheme.onBackground,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
+                                                text = "$totalChapters Chapters",
+                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
                                                 fontFamily = currentFontFamily
                                             )
-                                            Text(
-                                                text = "|",
-                                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
-                                                fontSize = 11.sp,
-                                                fontFamily = currentFontFamily
-                                            )
-                                            Text(
-                                                text = "${(progress * 100).toInt()}%",
-                                                color = MaterialTheme.colorScheme.onBackground,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontFamily = currentFontFamily
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "$readCount/$totalChapters",
+                                                    color = MaterialTheme.colorScheme.onBackground,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontFamily = currentFontFamily
+                                                )
+                                                Text(
+                                                    text = "|",
+                                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f),
+                                                    fontSize = 11.sp,
+                                                    fontFamily = currentFontFamily
+                                                )
+                                                Text(
+                                                    text = "${(progress * 100).toInt()}%",
+                                                    color = MaterialTheme.colorScheme.onBackground,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontFamily = currentFontFamily
+                                                )
+                                            }
                                         }
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(9.dp)
-                                            .clip(RoundedCornerShape(50.dp))
-                                            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
-                                    ) {
+                                        Spacer(modifier = Modifier.height(6.dp))
                                         Box(
                                             modifier = Modifier
-                                                .fillMaxHeight()
-                                                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                                                .background(MaterialTheme.colorScheme.onBackground)
+                                                .fillMaxWidth()
+                                                .height(9.dp)
+                                                .clip(RoundedCornerShape(50.dp))
+                                                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f))
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxHeight()
+                                                    .fillMaxWidth(progress.coerceIn(0f, 1f))
+                                                    .background(MaterialTheme.colorScheme.onBackground)
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            text = "$totalChapters Chapters",
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            fontFamily = currentFontFamily
                                         )
                                     }
                             }
@@ -3037,6 +3045,8 @@ fun BibleSettingsOverlay(
     customFonts: List<File> = emptyList(),
     selectedThemeIndex: Int,
     onThemeChange: (Int) -> Unit,
+    showReadingProgress: Boolean = true,
+    onToggleReadingProgress: (Boolean) -> Unit = {},
     onAddFont: () -> Unit = {},
     onRemoveFont: (String) -> Unit = {},
     onClose: () -> Unit
@@ -3285,6 +3295,46 @@ fun BibleSettingsOverlay(
                         }
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Reading Progress Toggle Section
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onToggleReadingProgress(!showReadingProgress) }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Reading Progress",
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Show progress bar of your reading",
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                        fontSize = 12.sp
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Switch(
+                    checked = showReadingProgress,
+                    onCheckedChange = { onToggleReadingProgress(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.background,
+                        checkedTrackColor = MaterialTheme.colorScheme.onBackground,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        uncheckedTrackColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f),
+                        uncheckedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
+                    )
+                )
             }
         }
     }

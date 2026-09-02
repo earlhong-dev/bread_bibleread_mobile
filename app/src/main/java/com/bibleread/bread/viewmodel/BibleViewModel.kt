@@ -289,6 +289,16 @@ class BibleViewModel(app: Application) : AndroidViewModel(app) {
         return BibleRepository(db.verseDao(), db.bookmarkDao())
     }
 
+    // Reading progress visibility toggle
+    var showReadingProgress by mutableStateOf(prefs.getBoolean("show_reading_progress", true))
+        private set
+
+    fun saveShowReadingProgress(show: Boolean) {
+        if (show == showReadingProgress) return
+        showReadingProgress = show
+        prefs.edit().putBoolean("show_reading_progress", show).apply()
+    }
+
     // Bible tab view mode: "carousel" or "list"
     var bibleViewMode by mutableStateOf(prefs.getString("bible_view_mode", "carousel") ?: "carousel")
         private set
